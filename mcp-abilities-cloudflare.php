@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Cloudflare
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-cloudflare
  * Description: Cloudflare abilities for MCP. Clear cache for entire site or specific URLs.
- * Version: 1.0.0
+ * Version: 1.0.1
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -81,6 +81,7 @@ function mcp_register_cloudflare_abilities(): void {
 				// Get Cloudflare credentials from plugin options.
 				$api_email = get_option( 'cloudflare_api_email', '' );
 				$api_key   = get_option( 'cloudflare_api_key', '' );
+				$zone_id   = get_option( 'cloudflare_zone_id', '' );
 				$domain    = get_option( 'cloudflare_cached_domain_name', '' );
 
 				if ( empty( $api_email ) || empty( $api_key ) ) {
@@ -94,37 +95,39 @@ function mcp_register_cloudflare_abilities(): void {
 					$domain = wp_parse_url( home_url(), PHP_URL_HOST );
 				}
 
-				// Step 1: Get zone ID for the domain.
-				$zones_response = wp_remote_get(
-					'https://api.cloudflare.com/client/v4/zones?name=' . rawurlencode( $domain ),
-					array(
-						'headers' => array(
-							'X-Auth-Email' => $api_email,
-							'X-Auth-Key'   => $api_key,
-							'Content-Type' => 'application/json',
-						),
-						'timeout' => 30,
-					)
-				);
-
-				if ( is_wp_error( $zones_response ) ) {
-					return array(
-						'success' => false,
-						'message' => 'Failed to connect to Cloudflare API: ' . $zones_response->get_error_message(),
+				// Step 1: Get zone ID - use stored value or look it up via API.
+				if ( empty( $zone_id ) ) {
+					$zones_response = wp_remote_get(
+						'https://api.cloudflare.com/client/v4/zones?name=' . rawurlencode( $domain ),
+						array(
+							'headers' => array(
+								'X-Auth-Email' => $api_email,
+								'X-Auth-Key'   => $api_key,
+								'Content-Type' => 'application/json',
+							),
+							'timeout' => 30,
+						)
 					);
+
+					if ( is_wp_error( $zones_response ) ) {
+						return array(
+							'success' => false,
+							'message' => 'Failed to connect to Cloudflare API: ' . $zones_response->get_error_message(),
+						);
+					}
+
+					$zones_body = json_decode( wp_remote_retrieve_body( $zones_response ), true );
+
+					if ( empty( $zones_body['success'] ) || empty( $zones_body['result'][0]['id'] ) ) {
+						$error_msg = isset( $zones_body['errors'][0]['message'] ) ? $zones_body['errors'][0]['message'] : 'Zone not found';
+						return array(
+							'success' => false,
+							'message' => 'Cloudflare API error: ' . $error_msg,
+						);
+					}
+
+					$zone_id = $zones_body['result'][0]['id'];
 				}
-
-				$zones_body = json_decode( wp_remote_retrieve_body( $zones_response ), true );
-
-				if ( empty( $zones_body['success'] ) || empty( $zones_body['result'][0]['id'] ) ) {
-					$error_msg = isset( $zones_body['errors'][0]['message'] ) ? $zones_body['errors'][0]['message'] : 'Zone not found';
-					return array(
-						'success' => false,
-						'message' => 'Cloudflare API error: ' . $error_msg,
-					);
-				}
-
-				$zone_id = $zones_body['result'][0]['id'];
 
 				// Step 2: Purge cache.
 				$purge_everything = isset( $input['purge_everything'] ) ? (bool) $input['purge_everything'] : true;
