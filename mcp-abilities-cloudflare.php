@@ -191,15 +191,45 @@ function mcp_register_cloudflare_abilities(): void {
 
 				// Step 2: Purge cache.
 				$purge_everything = isset( $input['purge_everything'] ) ? (bool) $input['purge_everything'] : true;
-				$files            = isset( $input['files'] ) && is_array( $input['files'] )
-					? array_values( array_filter( $input['files'], 'is_string' ) )
-					: array();
-				$tags             = isset( $input['tags'] ) && is_array( $input['tags'] )
-					? array_values( array_filter( $input['tags'], 'is_string' ) )
-					: array();
-				$hosts            = isset( $input['hosts'] ) && is_array( $input['hosts'] )
-					? array_values( array_filter( $input['hosts'], 'is_string' ) )
-					: array();
+					$files = isset( $input['files'] ) && is_array( $input['files'] )
+						? array_values(
+							array_filter(
+								array_map(
+									static function ( $item ) {
+										return is_string( $item ) ? esc_url_raw( $item ) : '';
+									},
+									$input['files']
+								)
+							)
+						)
+						: array();
+					$tags = isset( $input['tags'] ) && is_array( $input['tags'] )
+						? array_values(
+							array_filter(
+								array_map(
+									static function ( $item ) {
+										return is_string( $item ) ? sanitize_text_field( $item ) : '';
+									},
+									$input['tags']
+								)
+							)
+						)
+						: array();
+					$hosts = isset( $input['hosts'] ) && is_array( $input['hosts'] )
+						? array_values(
+							array_filter(
+								array_map(
+									static function ( $item ) {
+										return is_string( $item ) ? sanitize_text_field( $item ) : '';
+									},
+									$input['hosts']
+								)
+							)
+						)
+						: array();
+					$files = array_slice( $files, 0, 100 );
+					$tags  = array_slice( $tags, 0, 100 );
+					$hosts = array_slice( $hosts, 0, 100 );
 
 				if ( ! empty( $files ) ) {
 					$purge_data = array( 'files' => $files );
@@ -248,13 +278,13 @@ function mcp_register_cloudflare_abilities(): void {
 				);
 			},
 			'permission_callback' => 'mcp_cloudflare_permission_callback',
-			'meta'                => array(
-				'annotations' => array(
-					'readonly'    => false,
-					'destructive' => false,
-					'idempotent'  => true,
+				'meta'                => array(
+					'annotations' => array(
+						'readonly'    => false,
+						'destructive' => true,
+						'idempotent'  => true,
+					),
 				),
-			),
 		)
 	);
 

@@ -6,7 +6,7 @@ Cloudflare cache management for WordPress via MCP.
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/gpl-2.0)
 
 **Tested up to:** 6.9
-**Stable tag:** 1.0.2
+**Stable tag:** 1.0.3
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -31,11 +31,14 @@ This add-on plugin exposes Cloudflare cache management through MCP (Model Contex
 3. Upload via WordPress Admin → Plugins → Add New → Upload Plugin
 4. Activate the plugin
 
-## Abilities (1)
+## Abilities (4)
 
 | Ability | Description |
 |---------|-------------|
 | `cloudflare/clear-cache` | Purge entire Cloudflare cache or specific URLs |
+| `cloudflare/get-zone` | Get active Cloudflare zone details |
+| `cloudflare/get-development-mode` | Read current Cloudflare Development Mode status |
+| `cloudflare/set-development-mode` | Enable or disable Cloudflare Development Mode |
 
 ## Usage Examples
 
