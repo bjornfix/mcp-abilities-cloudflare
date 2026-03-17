@@ -14,7 +14,24 @@ Cloudflare cache management for WordPress via MCP.
 
 This add-on plugin exposes Cloudflare cache management through MCP (Model Context Protocol). Tell your AI assistant "clear the Cloudflare cache" and it happens instantly.
 
-**Part of the [MCP Expose Abilities](https://devenia.com/plugins/mcp-expose-abilities/) ecosystem.**
+**Part of the [MCP Expose Abilities](https://github.com/bjornfix/mcp-expose-abilities) ecosystem.**
+
+This is one piece of a bigger open WordPress automation stack that lets AI agents handle real site operations instead of stopping at advice.
+
+## Why This Is Cool
+
+Cloudflare cache work is small, important, and annoyingly repetitive. That makes it a perfect example of what this ecosystem is good at.
+
+Instead of logging into multiple dashboards and doing the same purge or debug routine by hand, you can tell the agent what changed and let it take care of the cache step too.
+
+## Documentation
+
+- [Core Plugin: MCP Expose Abilities](https://github.com/bjornfix/mcp-expose-abilities)
+- [MCP Wiki Home](https://github.com/bjornfix/mcp-expose-abilities/wiki)
+- [Why Teams Use It](https://github.com/bjornfix/mcp-expose-abilities/wiki/Why-Teams-Use-It)
+- [Use Cases](https://github.com/bjornfix/mcp-expose-abilities/wiki/Use-Cases)
+- [Cloudflare Add-On Guide](https://github.com/bjornfix/mcp-expose-abilities/wiki/Addon-Cloudflare)
+- [Getting Started](https://github.com/bjornfix/mcp-expose-abilities/wiki/Getting-Started)
 
 ## Requirements
 
@@ -90,8 +107,19 @@ GPL-2.0+
 
 [Devenia](https://devenia.com) - We've been doing SEO and web development since 1993.
 
+## Free and Open
+
+Like the rest of the ecosystem, this add-on is free to use, completely open, and built to be reused.
+
+## Star and Share
+
+If this add-on helps, please star the repo, share the ecosystem, and point people to the main wiki:
+
+- https://github.com/bjornfix/mcp-expose-abilities
+- https://github.com/bjornfix/mcp-expose-abilities/wiki
+
 ## Links
 
-- [Plugin Page](https://devenia.com/plugins/mcp-expose-abilities/)
 - [Core Plugin (MCP Expose Abilities)](https://github.com/bjornfix/mcp-expose-abilities)
-- [All Add-on Plugins](https://devenia.com/plugins/mcp-expose-abilities/#add-ons)
+- [Main Wiki](https://github.com/bjornfix/mcp-expose-abilities/wiki)
+- [Cloudflare Add-On Guide](https://github.com/bjornfix/mcp-expose-abilities/wiki/Addon-Cloudflare)
