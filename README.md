@@ -6,7 +6,7 @@ Cloudflare cache management for WordPress via MCP.
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/gpl-2.0)
 
 **Tested up to:** 6.9
-**Stable tag:** 1.0.3
+**Stable tag:** 1.0.4
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -86,6 +86,9 @@ Instead of logging into multiple dashboards and doing the same purge or debug ro
 ```
 
 ## Changelog
+
+### 1.0.4
+- Fixed zero-parameter ability schemas so MCP Adapter 0.4.x clients do not receive invalid `properties: []` JSON
 
 ### 1.0.3
 - Fixed: Removed hard plugin header dependency on abilities-api to avoid slug-mismatch activation blocking

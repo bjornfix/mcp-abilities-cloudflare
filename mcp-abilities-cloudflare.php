@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Cloudflare
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-cloudflare
  * Description: Cloudflare abilities for MCP. Clear cache for entire site or specific URLs.
- * Version: 1.0.3
+ * Version: 1.0.4
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -299,7 +299,6 @@ function mcp_register_cloudflare_abilities(): void {
 			'category'            => 'site',
 			'input_schema'        => array(
 				'type'                 => 'object',
-				'properties'           => array(),
 				'additionalProperties' => false,
 			),
 			'output_schema'       => array(
@@ -371,7 +370,6 @@ function mcp_register_cloudflare_abilities(): void {
 			'category'            => 'site',
 			'input_schema'        => array(
 				'type'                 => 'object',
-				'properties'           => array(),
 				'additionalProperties' => false,
 			),
 			'output_schema'       => array(
