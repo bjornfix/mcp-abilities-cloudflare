@@ -138,6 +138,14 @@ assert( isset( $registered_abilities['cloudflare/get-development-mode'] ) );
 assert( isset( $registered_abilities['cloudflare/set-development-mode'] ) );
 assert( isset( $registered_abilities['cloudflare/clear-cache'] ) );
 
+foreach ( array( 'cloudflare/get-zone', 'cloudflare/get-development-mode' ) as $ability_name ) {
+	$schema = $registered_abilities[ $ability_name ]['input_schema'];
+	assert( 'object' === $schema['type'] );
+	assert( is_array( $schema['properties'] ) );
+	assert( ! empty( $schema['properties']['_ignored'] ) );
+	assert( false === $schema['additionalProperties'] );
+}
+
 $get_zone = $registered_abilities['cloudflare/get-zone']['execute_callback'];
 $zone     = $get_zone( new stdClass() );
 assert( true === $zone['success'] );

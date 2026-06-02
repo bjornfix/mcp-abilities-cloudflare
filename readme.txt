@@ -3,7 +3,7 @@ Contributors: devenia
 Tags: mcp, cloudflare, cache, ai, automation
 Requires at least: 6.9
 Tested up to: 7.0
-Stable tag: 1.0.6
+Stable tag: 1.0.7
 Requires PHP: 8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -24,6 +24,10 @@ Part of the MCP Expose Abilities ecosystem.
 4. Activate the plugin
 
 == Changelog ==
+
+= 1.0.7 =
+* Fixed: zero-parameter schemas now stay object-shaped without using stdClass-backed `properties`.
+* Fixed: validator path no longer throws `Cannot use object of type stdClass as array` for object-shaped inputs.
 
 = 1.0.6 =
 * Fixed: normalize stdClass-shaped MCP inputs and Cloudflare API response data before array access.

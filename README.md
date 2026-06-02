@@ -6,7 +6,7 @@ Cloudflare cache management for WordPress via MCP.
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/gpl-2.0)
 
 **Tested up to:** 7.0
-**Stable tag:** 1.0.6
+**Stable tag:** 1.0.7
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -86,6 +86,10 @@ Instead of logging into multiple dashboards and doing the same purge or debug ro
 ```
 
 ## Changelog
+
+### 1.0.7
+- Fixed zero-parameter schemas so they stay object-shaped without using stdClass-backed `properties`.
+- Fixed validator-path `Cannot use object of type stdClass as array` failures for object-shaped inputs.
 
 ### 1.0.6
 - Fixed stdClass-shaped MCP inputs and Cloudflare API response data normalization before array access.

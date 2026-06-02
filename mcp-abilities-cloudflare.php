@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Cloudflare
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-cloudflare
  * Description: Cloudflare abilities for MCP. Clear cache for entire site or specific URLs.
- * Version: 1.0.6
+ * Version: 1.0.7
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -91,6 +91,29 @@ function mcp_cloudflare_normalize_input( $input ): array {
 	$input = mcp_cloudflare_normalize_data( $input );
 
 	return is_array( $input ) ? $input : array();
+}
+
+/**
+ * Return a validator-safe schema for abilities with no meaningful input.
+ *
+ * An actually empty PHP array can serialize as JSON [] in some discovery paths,
+ * while a stdClass `properties` value can break PHP-side validators that expect
+ * arrays. A single optional ignored field keeps the schema object-shaped without
+ * requiring callers to send anything.
+ *
+ * @return array
+ */
+function mcp_cloudflare_empty_input_schema(): array {
+	return array(
+		'type'                 => 'object',
+		'properties'           => array(
+			'_ignored' => array(
+				'type'        => 'boolean',
+				'description' => 'Optional placeholder ignored by this ability.',
+			),
+		),
+		'additionalProperties' => false,
+	);
 }
 
 /**
@@ -489,11 +512,7 @@ function mcp_register_cloudflare_abilities(): void {
 			'label'               => 'Get Cloudflare Zone',
 			'description'         => 'Fetch Cloudflare zone details for the site domain.',
 			'category'            => 'site',
-			'input_schema'        => array(
-				'type'                 => 'object',
-				'properties'           => (object) array(),
-				'additionalProperties' => false,
-			),
+			'input_schema'        => mcp_cloudflare_empty_input_schema(),
 			'output_schema'       => array(
 				'type'       => 'object',
 				'properties' => array(
@@ -561,11 +580,7 @@ function mcp_register_cloudflare_abilities(): void {
 			'label'               => 'Get Cloudflare Development Mode',
 			'description'         => 'Get Cloudflare development mode status.',
 			'category'            => 'site',
-			'input_schema'        => array(
-				'type'                 => 'object',
-				'properties'           => (object) array(),
-				'additionalProperties' => false,
-			),
+			'input_schema'        => mcp_cloudflare_empty_input_schema(),
 			'output_schema'       => array(
 				'type'       => 'object',
 				'properties' => array(
