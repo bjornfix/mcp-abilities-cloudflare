@@ -5,8 +5,8 @@ Cloudflare cache management for WordPress via MCP.
 [![GitHub release](https://img.shields.io/github/v/release/bjornfix/mcp-abilities-cloudflare)](https://github.com/bjornfix/mcp-abilities-cloudflare/releases)
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/gpl-2.0)
 
-**Tested up to:** 6.9
-**Stable tag:** 1.0.4
+**Tested up to:** 7.0
+**Stable tag:** 1.0.5
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -86,6 +86,11 @@ Instead of logging into multiple dashboards and doing the same purge or debug ro
 ```
 
 ## Changelog
+
+### 1.0.5
+- Fixed Cloudflare API auth handling for installs using API tokens instead of only email + global API key.
+- Added auth-header fallback for Cloudflare responses that report invalid request headers.
+- Fixed zero-parameter abilities so `{}` inputs are accepted by MCP clients.
 
 ### 1.0.4
 - Fixed zero-parameter ability schemas so MCP Adapter 0.4.x clients do not receive invalid `properties: []` JSON

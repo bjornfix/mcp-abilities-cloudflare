@@ -2,8 +2,8 @@
 Contributors: devenia
 Tags: mcp, cloudflare, cache, ai, automation
 Requires at least: 6.9
-Tested up to: 6.9
-Stable tag: 1.0.4
+Tested up to: 7.0
+Stable tag: 1.0.5
 Requires PHP: 8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -24,6 +24,11 @@ Part of the MCP Expose Abilities ecosystem.
 4. Activate the plugin
 
 == Changelog ==
+
+= 1.0.5 =
+* Fixed: Cloudflare API auth now supports API token installs as well as email plus global API key installs.
+* Fixed: Cloudflare API calls retry with the alternate auth header format when Cloudflare reports invalid request headers.
+* Fixed: zero-parameter abilities now accept empty object inputs from MCP clients.
 
 = 1.0.4 =
 * Fixed: zero-parameter ability schemas now avoid empty `properties` objects so MCP Adapter 0.4.x clients do not receive invalid `properties: []` JSON

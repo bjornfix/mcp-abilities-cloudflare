@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Cloudflare
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-cloudflare
  * Description: Cloudflare abilities for MCP. Clear cache for entire site or specific URLs.
- * Version: 1.0.4
+ * Version: 1.0.5
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -42,49 +42,197 @@ function mcp_cloudflare_permission_callback(): bool {
 }
 
 /**
- * Build Cloudflare API headers.
+ * Read a Cloudflare-related option or constant as a trimmed string.
  *
- * @param string $api_email API email.
- * @param string $api_key   API key.
+ * @param string $option_name   WordPress option name.
+ * @param string $constant_name Optional constant name.
+ * @return string
+ */
+function mcp_cloudflare_get_config_value( string $option_name, string $constant_name = '' ): string {
+	if ( '' !== $constant_name && defined( $constant_name ) && constant( $constant_name ) !== '' ) {
+		return trim( (string) constant( $constant_name ) );
+	}
+
+	$value = get_option( $option_name, '' );
+
+	return is_string( $value ) ? trim( $value ) : '';
+}
+
+/**
+ * Build Cloudflare API headers for the selected auth mode.
+ *
+ * @param array  $context   Cloudflare context.
+ * @param string $auth_mode Auth mode: token or key.
  * @return array
  */
-function mcp_cloudflare_api_headers( string $api_email, string $api_key ): array {
-	return array(
-		'X-Auth-Email' => $api_email,
-		'X-Auth-Key'   => $api_key,
+function mcp_cloudflare_api_headers( array $context, string $auth_mode ): array {
+	$headers = array(
 		'Content-Type' => 'application/json',
 	);
+
+	if ( 'token' === $auth_mode ) {
+		$headers['Authorization'] = 'Bearer ' . $context['api_token'];
+		return $headers;
+	}
+
+	$headers['X-Auth-Email'] = $context['api_email'];
+	$headers['X-Auth-Key']   = $context['api_key'];
+
+	return $headers;
+}
+
+/**
+ * Extract a readable Cloudflare API error message.
+ *
+ * @param array|null $body Decoded response body.
+ * @return string
+ */
+function mcp_cloudflare_api_error_message( ?array $body ): string {
+	if ( empty( $body['errors'] ) || ! is_array( $body['errors'] ) ) {
+		return 'Unknown error';
+	}
+
+	$error = reset( $body['errors'] );
+	if ( is_array( $error ) && ! empty( $error['message'] ) ) {
+		return (string) $error['message'];
+	}
+
+	return 'Unknown error';
+}
+
+/**
+ * Determine whether a Cloudflare response failed because auth headers were wrong.
+ *
+ * @param array|null $body Decoded response body.
+ * @return bool
+ */
+function mcp_cloudflare_is_invalid_header_error( ?array $body ): bool {
+	if ( empty( $body['errors'] ) || ! is_array( $body['errors'] ) ) {
+		return false;
+	}
+
+	foreach ( $body['errors'] as $error ) {
+		if ( ! is_array( $error ) ) {
+			continue;
+		}
+
+		$code    = isset( $error['code'] ) ? (int) $error['code'] : 0;
+		$message = isset( $error['message'] ) ? strtolower( (string) $error['message'] ) : '';
+
+		if ( 6003 === $code || str_contains( $message, 'invalid request headers' ) ) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
+ * Return auth modes to try, in order.
+ *
+ * The official Cloudflare plugin has historically used email + global API key,
+ * while newer installs may use an API token. Some installs store the token in
+ * the legacy key option, so we retry as Bearer auth only when Cloudflare says
+ * the request headers are invalid.
+ *
+ * @param array $context Cloudflare context.
+ * @return array
+ */
+function mcp_cloudflare_auth_modes( array $context ): array {
+	$modes = array();
+
+	if ( ! empty( $context['api_token'] ) ) {
+		$modes[] = 'token';
+	}
+
+	if ( ! empty( $context['api_email'] ) && ! empty( $context['api_key'] ) ) {
+		$modes[] = 'key';
+	}
+
+	if ( empty( $context['api_token'] ) && ! empty( $context['api_key'] ) ) {
+		$modes[]              = 'token';
+		$context['api_token'] = $context['api_key'];
+	}
+
+	return array_values( array_unique( $modes ) );
+}
+
+/**
+ * Make a Cloudflare API request with auth-header fallback.
+ *
+ * @param string $method  HTTP method.
+ * @param string $url     Cloudflare API URL.
+ * @param array  $context Cloudflare context.
+ * @param array  $args    Extra request args.
+ * @return array|WP_Error
+ */
+function mcp_cloudflare_api_request( string $method, string $url, array $context, array $args = array() ) {
+	$modes = mcp_cloudflare_auth_modes( $context );
+	if ( empty( $modes ) ) {
+		return new WP_Error( 'cloudflare_missing_credentials', 'Cloudflare API credentials not configured. Install and configure the Cloudflare plugin first.' );
+	}
+
+	foreach ( $modes as $index => $mode ) {
+		if ( 'token' === $mode && empty( $context['api_token'] ) && ! empty( $context['api_key'] ) ) {
+			$context['api_token'] = $context['api_key'];
+		}
+
+		$request_args            = $args;
+		$request_args['method']  = $method;
+		$request_args['headers'] = mcp_cloudflare_api_headers( $context, $mode );
+		$request_args['timeout'] = isset( $request_args['timeout'] ) ? $request_args['timeout'] : 30;
+
+		$response = wp_remote_request( $url, $request_args );
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+		$body = is_array( $body ) ? $body : null;
+
+		if ( empty( $body['success'] ) && mcp_cloudflare_is_invalid_header_error( $body ) && isset( $modes[ $index + 1 ] ) ) {
+			continue;
+		}
+
+		return array(
+			'response'  => $response,
+			'body'      => $body,
+			'auth_mode' => $mode,
+		);
+	}
+
+	return new WP_Error( 'cloudflare_auth', 'Cloudflare API error: Invalid request headers' );
 }
 
 /**
  * Resolve and cache the Cloudflare zone ID for a domain.
  *
- * @param string $api_email API email.
- * @param string $api_key   API key.
+ * @param array  $context Cloudflare context.
  * @param string $domain    Domain name.
  * @return string|WP_Error
  */
-function mcp_cloudflare_get_zone_id( string $api_email, string $api_key, string $domain ) {
+function mcp_cloudflare_get_zone_id( array $context, string $domain ) {
 	$zone_id = get_option( 'cloudflare_zone_id', '' );
 	if ( ! empty( $zone_id ) ) {
 		return $zone_id;
 	}
 
-	$zones_response = wp_remote_get(
+	$zones_result = mcp_cloudflare_api_request(
+		'GET',
 		add_query_arg( 'name', $domain, 'https://api.cloudflare.com/client/v4/zones' ),
-		array(
-			'headers' => mcp_cloudflare_api_headers( $api_email, $api_key ),
-			'timeout' => 30,
-		)
+		$context
 	);
 
-	if ( is_wp_error( $zones_response ) ) {
-		return $zones_response;
+	if ( is_wp_error( $zones_result ) ) {
+		return $zones_result;
 	}
 
-	$zones_body = json_decode( wp_remote_retrieve_body( $zones_response ), true );
+	$zones_body = $zones_result['body'];
 	if ( empty( $zones_body['success'] ) || empty( $zones_body['result'][0]['id'] ) ) {
-		$error_msg = isset( $zones_body['errors'][0]['message'] ) ? $zones_body['errors'][0]['message'] : 'Zone not found';
+		$error_msg = mcp_cloudflare_api_error_message( $zones_body );
+		if ( 'Unknown error' === $error_msg ) {
+			$error_msg = 'Zone not found';
+		}
 		return new WP_Error( 'cloudflare_zone', 'Cloudflare API error: ' . $error_msg );
 	}
 
@@ -100,12 +248,13 @@ function mcp_cloudflare_get_zone_id( string $api_email, string $api_key, string 
  * @return array|WP_Error
  */
 function mcp_cloudflare_get_context() {
-	$api_email = get_option( 'cloudflare_api_email', '' );
-	$api_key   = get_option( 'cloudflare_api_key', '' );
-	$zone_id   = get_option( 'cloudflare_zone_id', '' );
-	$domain    = get_option( 'cloudflare_cached_domain_name', '' );
+	$api_email = mcp_cloudflare_get_config_value( 'cloudflare_api_email', 'CLOUDFLARE_EMAIL' );
+	$api_key   = mcp_cloudflare_get_config_value( 'cloudflare_api_key', 'CLOUDFLARE_API_KEY' );
+	$api_token = mcp_cloudflare_get_config_value( 'cloudflare_api_token', 'CLOUDFLARE_API_TOKEN' );
+	$zone_id   = mcp_cloudflare_get_config_value( 'cloudflare_zone_id', 'CLOUDFLARE_ZONE_ID' );
+	$domain    = mcp_cloudflare_get_config_value( 'cloudflare_cached_domain_name', 'CLOUDFLARE_DOMAIN_NAME' );
 
-	if ( empty( $api_email ) || empty( $api_key ) ) {
+	if ( empty( $api_token ) && ( empty( $api_email ) || empty( $api_key ) ) ) {
 		return new WP_Error( 'cloudflare_missing_credentials', 'Cloudflare API credentials not configured. Install and configure the Cloudflare plugin first.' );
 	}
 
@@ -113,19 +262,23 @@ function mcp_cloudflare_get_context() {
 		$domain = wp_parse_url( home_url(), PHP_URL_HOST );
 	}
 
-	if ( empty( $zone_id ) ) {
-		$zone_id = mcp_cloudflare_get_zone_id( $api_email, $api_key, $domain );
-		if ( is_wp_error( $zone_id ) ) {
-			return $zone_id;
-		}
-	}
-
-	return array(
+	$context = array(
 		'api_email' => $api_email,
 		'api_key'   => $api_key,
+		'api_token' => $api_token,
 		'zone_id'   => $zone_id,
 		'domain'    => $domain,
 	);
+
+	if ( empty( $context['zone_id'] ) ) {
+		$zone_id = mcp_cloudflare_get_zone_id( $context, $domain );
+		if ( is_wp_error( $zone_id ) ) {
+			return $zone_id;
+		}
+		$context['zone_id'] = $zone_id;
+	}
+
+	return $context;
 }
 
 /**
@@ -241,26 +394,27 @@ function mcp_register_cloudflare_abilities(): void {
 					$purge_data = array( 'purge_everything' => $purge_everything );
 				}
 
-				$purge_response = wp_remote_post(
+				$purge_result = mcp_cloudflare_api_request(
+					'POST',
 					'https://api.cloudflare.com/client/v4/zones/' . $context['zone_id'] . '/purge_cache',
+					$context,
 					array(
-						'headers' => mcp_cloudflare_api_headers( $context['api_email'], $context['api_key'] ),
 						'body'    => wp_json_encode( $purge_data ),
 						'timeout' => 30,
 					)
 				);
 
-				if ( is_wp_error( $purge_response ) ) {
+				if ( is_wp_error( $purge_result ) ) {
 					return array(
 						'success' => false,
-						'message' => 'Failed to purge cache: ' . $purge_response->get_error_message(),
+						'message' => 'Failed to purge cache: ' . $purge_result->get_error_message(),
 					);
 				}
 
-				$purge_body = json_decode( wp_remote_retrieve_body( $purge_response ), true );
+				$purge_body = $purge_result['body'];
 
 				if ( empty( $purge_body['success'] ) ) {
-					$error_msg = isset( $purge_body['errors'][0]['message'] ) ? $purge_body['errors'][0]['message'] : 'Unknown error';
+					$error_msg = mcp_cloudflare_api_error_message( $purge_body );
 					return array(
 						'success' => false,
 						'message' => 'Cache purge failed: ' . $error_msg,
@@ -299,6 +453,7 @@ function mcp_register_cloudflare_abilities(): void {
 			'category'            => 'site',
 			'input_schema'        => array(
 				'type'                 => 'object',
+				'properties'           => (object) array(),
 				'additionalProperties' => false,
 			),
 			'output_schema'       => array(
@@ -309,7 +464,9 @@ function mcp_register_cloudflare_abilities(): void {
 					'message' => array( 'type' => 'string' ),
 				),
 			),
-			'execute_callback'    => function (): array {
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = is_array( $input ) ? $input : array();
+
 				$context = mcp_cloudflare_get_context();
 				if ( is_wp_error( $context ) ) {
 					return array(
@@ -318,24 +475,22 @@ function mcp_register_cloudflare_abilities(): void {
 					);
 				}
 
-				$response = wp_remote_get(
+				$result = mcp_cloudflare_api_request(
+					'GET',
 					'https://api.cloudflare.com/client/v4/zones/' . $context['zone_id'],
-					array(
-						'headers' => mcp_cloudflare_api_headers( $context['api_email'], $context['api_key'] ),
-						'timeout' => 30,
-					)
+					$context
 				);
 
-				if ( is_wp_error( $response ) ) {
+				if ( is_wp_error( $result ) ) {
 					return array(
 						'success' => false,
-						'message' => $response->get_error_message(),
+						'message' => $result->get_error_message(),
 					);
 				}
 
-				$body = json_decode( wp_remote_retrieve_body( $response ), true );
+				$body = $result['body'];
 				if ( empty( $body['success'] ) || empty( $body['result'] ) ) {
-					$error_msg = isset( $body['errors'][0]['message'] ) ? $body['errors'][0]['message'] : 'Unknown error';
+					$error_msg = mcp_cloudflare_api_error_message( $body );
 					return array(
 						'success' => false,
 						'message' => 'Cloudflare API error: ' . $error_msg,
@@ -370,6 +525,7 @@ function mcp_register_cloudflare_abilities(): void {
 			'category'            => 'site',
 			'input_schema'        => array(
 				'type'                 => 'object',
+				'properties'           => (object) array(),
 				'additionalProperties' => false,
 			),
 			'output_schema'       => array(
@@ -380,7 +536,9 @@ function mcp_register_cloudflare_abilities(): void {
 					'message' => array( 'type' => 'string' ),
 				),
 			),
-			'execute_callback'    => function (): array {
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = is_array( $input ) ? $input : array();
+
 				$context = mcp_cloudflare_get_context();
 				if ( is_wp_error( $context ) ) {
 					return array(
@@ -389,24 +547,22 @@ function mcp_register_cloudflare_abilities(): void {
 					);
 				}
 
-				$response = wp_remote_get(
+				$result = mcp_cloudflare_api_request(
+					'GET',
 					'https://api.cloudflare.com/client/v4/zones/' . $context['zone_id'] . '/settings/development_mode',
-					array(
-						'headers' => mcp_cloudflare_api_headers( $context['api_email'], $context['api_key'] ),
-						'timeout' => 30,
-					)
+					$context
 				);
 
-				if ( is_wp_error( $response ) ) {
+				if ( is_wp_error( $result ) ) {
 					return array(
 						'success' => false,
-						'message' => $response->get_error_message(),
+						'message' => $result->get_error_message(),
 					);
 				}
 
-				$body = json_decode( wp_remote_retrieve_body( $response ), true );
+				$body = $result['body'];
 				if ( empty( $body['success'] ) || empty( $body['result']['value'] ) ) {
-					$error_msg = isset( $body['errors'][0]['message'] ) ? $body['errors'][0]['message'] : 'Unknown error';
+					$error_msg = mcp_cloudflare_api_error_message( $body );
 					return array(
 						'success' => false,
 						'message' => 'Cloudflare API error: ' . $error_msg,
@@ -476,26 +632,26 @@ function mcp_register_cloudflare_abilities(): void {
 					);
 				}
 
-				$response = wp_remote_request(
+				$result = mcp_cloudflare_api_request(
+					'PATCH',
 					'https://api.cloudflare.com/client/v4/zones/' . $context['zone_id'] . '/settings/development_mode',
+					$context,
 					array(
-						'method'  => 'PATCH',
-						'headers' => mcp_cloudflare_api_headers( $context['api_email'], $context['api_key'] ),
 						'body'    => wp_json_encode( array( 'value' => $value ) ),
 						'timeout' => 30,
 					)
 				);
 
-				if ( is_wp_error( $response ) ) {
+				if ( is_wp_error( $result ) ) {
 					return array(
 						'success' => false,
-						'message' => $response->get_error_message(),
+						'message' => $result->get_error_message(),
 					);
 				}
 
-				$body = json_decode( wp_remote_retrieve_body( $response ), true );
+				$body = $result['body'];
 				if ( empty( $body['success'] ) || empty( $body['result']['value'] ) ) {
-					$error_msg = isset( $body['errors'][0]['message'] ) ? $body['errors'][0]['message'] : 'Unknown error';
+					$error_msg = mcp_cloudflare_api_error_message( $body );
 					return array(
 						'success' => false,
 						'message' => 'Cloudflare API error: ' . $error_msg,
