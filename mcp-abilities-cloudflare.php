@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Cloudflare
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-cloudflare
  * Description: Cloudflare abilities for MCP. Clear cache for entire site or specific URLs.
- * Version: 1.0.5
+ * Version: 1.0.6
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -59,6 +59,41 @@ function mcp_cloudflare_get_config_value( string $option_name, string $constant_
 }
 
 /**
+ * Recursively normalize decoded JSON, MCP input, and option payloads to arrays.
+ *
+ * Some MCP clients and WordPress internals may pass empty object-shaped values as stdClass.
+ * The ability callbacks use array access internally, so normalize once at the boundary.
+ *
+ * @param mixed $value Value to normalize.
+ * @return mixed
+ */
+function mcp_cloudflare_normalize_data( $value ) {
+	if ( $value instanceof stdClass ) {
+		$value = get_object_vars( $value );
+	}
+
+	if ( is_array( $value ) ) {
+		foreach ( $value as $key => $item ) {
+			$value[ $key ] = mcp_cloudflare_normalize_data( $item );
+		}
+	}
+
+	return $value;
+}
+
+/**
+ * Normalize ability callback input to an array.
+ *
+ * @param mixed $input Raw ability input.
+ * @return array
+ */
+function mcp_cloudflare_normalize_input( $input ): array {
+	$input = mcp_cloudflare_normalize_data( $input );
+
+	return is_array( $input ) ? $input : array();
+}
+
+/**
  * Build Cloudflare API headers for the selected auth mode.
  *
  * @param array  $context   Cloudflare context.
@@ -84,10 +119,11 @@ function mcp_cloudflare_api_headers( array $context, string $auth_mode ): array 
 /**
  * Extract a readable Cloudflare API error message.
  *
- * @param array|null $body Decoded response body.
+ * @param mixed $body Decoded response body.
  * @return string
  */
-function mcp_cloudflare_api_error_message( ?array $body ): string {
+function mcp_cloudflare_api_error_message( $body ): string {
+	$body = mcp_cloudflare_normalize_data( $body );
 	if ( empty( $body['errors'] ) || ! is_array( $body['errors'] ) ) {
 		return 'Unknown error';
 	}
@@ -103,10 +139,11 @@ function mcp_cloudflare_api_error_message( ?array $body ): string {
 /**
  * Determine whether a Cloudflare response failed because auth headers were wrong.
  *
- * @param array|null $body Decoded response body.
+ * @param mixed $body Decoded response body.
  * @return bool
  */
-function mcp_cloudflare_is_invalid_header_error( ?array $body ): bool {
+function mcp_cloudflare_is_invalid_header_error( $body ): bool {
+	$body = mcp_cloudflare_normalize_data( $body );
 	if ( empty( $body['errors'] ) || ! is_array( $body['errors'] ) ) {
 		return false;
 	}
@@ -187,7 +224,8 @@ function mcp_cloudflare_api_request( string $method, string $url, array $context
 			return $response;
 		}
 
-		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+		$body = json_decode( wp_remote_retrieve_body( $response ) );
+		$body = mcp_cloudflare_normalize_data( $body );
 		$body = is_array( $body ) ? $body : null;
 
 		if ( empty( $body['success'] ) && mcp_cloudflare_is_invalid_header_error( $body ) && isset( $modes[ $index + 1 ] ) ) {
@@ -332,7 +370,7 @@ function mcp_register_cloudflare_abilities(): void {
 				),
 			),
 			'execute_callback'    => function ( $input = array() ): array {
-				$input = is_array( $input ) ? $input : array();
+				$input = mcp_cloudflare_normalize_input( $input );
 
 				$context = mcp_cloudflare_get_context();
 				if ( is_wp_error( $context ) ) {
@@ -465,7 +503,7 @@ function mcp_register_cloudflare_abilities(): void {
 				),
 			),
 			'execute_callback'    => function ( $input = array() ): array {
-				$input = is_array( $input ) ? $input : array();
+				$input = mcp_cloudflare_normalize_input( $input );
 
 				$context = mcp_cloudflare_get_context();
 				if ( is_wp_error( $context ) ) {
@@ -537,7 +575,7 @@ function mcp_register_cloudflare_abilities(): void {
 				),
 			),
 			'execute_callback'    => function ( $input = array() ): array {
-				$input = is_array( $input ) ? $input : array();
+				$input = mcp_cloudflare_normalize_input( $input );
 
 				$context = mcp_cloudflare_get_context();
 				if ( is_wp_error( $context ) ) {
@@ -616,6 +654,7 @@ function mcp_register_cloudflare_abilities(): void {
 				),
 			),
 			'execute_callback'    => function ( $input = array() ): array {
+				$input = mcp_cloudflare_normalize_input( $input );
 				$value = sanitize_text_field( $input['value'] ?? '' );
 				if ( empty( $value ) ) {
 					return array(

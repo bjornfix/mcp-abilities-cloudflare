@@ -3,7 +3,7 @@ Contributors: devenia
 Tags: mcp, cloudflare, cache, ai, automation
 Requires at least: 6.9
 Tested up to: 7.0
-Stable tag: 1.0.5
+Stable tag: 1.0.6
 Requires PHP: 8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -24,6 +24,10 @@ Part of the MCP Expose Abilities ecosystem.
 4. Activate the plugin
 
 == Changelog ==
+
+= 1.0.6 =
+* Fixed: normalize stdClass-shaped MCP inputs and Cloudflare API response data before array access.
+* Fixed: `cloudflare/get-zone` no longer throws `Cannot use object of type stdClass as array` when called with `{}`.
 
 = 1.0.5 =
 * Fixed: Cloudflare API auth now supports API token installs as well as email plus global API key installs.
