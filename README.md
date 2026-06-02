@@ -6,7 +6,7 @@ Cloudflare cache management for WordPress via MCP.
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/gpl-2.0)
 
 **Tested up to:** 7.0
-**Stable tag:** 1.0.7
+**Stable tag:** 1.0.8
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -86,6 +86,12 @@ Instead of logging into multiple dashboards and doing the same purge or debug ro
 ```
 
 ## Changelog
+
+### 1.0.8
+- Fixed Cloudflare API Token installs where the official Cloudflare plugin stores the token in `cloudflare_api_key`.
+- Matched the official Cloudflare plugin's Global API Key vs API Token credential-format detection.
+- Retried cache purge requests with alternate auth when Cloudflare returns `Authentication error`.
+- Updated zero-parameter ability schemas to accept the empty/null representations that MCP/WordPress paths can produce for `{}`.
 
 ### 1.0.7
 - Fixed zero-parameter schemas so they stay object-shaped without using stdClass-backed `properties`.

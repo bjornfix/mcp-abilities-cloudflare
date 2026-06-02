@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Cloudflare
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-cloudflare
  * Description: Cloudflare abilities for MCP. Clear cache for entire site or specific URLs.
- * Version: 1.0.7
+ * Version: 1.0.8
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -96,16 +96,15 @@ function mcp_cloudflare_normalize_input( $input ): array {
 /**
  * Return a validator-safe schema for abilities with no meaningful input.
  *
- * An actually empty PHP array can serialize as JSON [] in some discovery paths,
- * while a stdClass `properties` value can break PHP-side validators that expect
- * arrays. A single optional ignored field keeps the schema object-shaped without
- * requiring callers to send anything.
+ * JSON `{}` can arrive at PHP as an empty array or null before WP_Ability
+ * validation, depending on the MCP Adapter/Abilities API version. Accept those
+ * no-parameter representations without requiring callers to send a placeholder.
  *
  * @return array
  */
 function mcp_cloudflare_empty_input_schema(): array {
 	return array(
-		'type'                 => 'object',
+		'type'                 => array( 'object', 'array', 'null' ),
 		'properties'           => array(
 			'_ignored' => array(
 				'type'        => 'boolean',
@@ -113,7 +112,35 @@ function mcp_cloudflare_empty_input_schema(): array {
 			),
 		),
 		'additionalProperties' => false,
+		'maxItems'             => 0,
 	);
+}
+
+/**
+ * Determine whether a credential is a Cloudflare Global API Key.
+ *
+ * Mirrors the official Cloudflare WordPress plugin's v4.14.3 credential
+ * classification: global keys use X-Auth-Email + X-Auth-Key, API tokens use
+ * Authorization: Bearer. The Cloudflare plugin stores both in cloudflare_api_key.
+ *
+ * @param string $credential Cloudflare API credential.
+ * @return bool
+ */
+function mcp_cloudflare_is_global_api_key( string $credential ): bool {
+	if ( '' === $credential ) {
+		return false;
+	}
+
+	if ( str_starts_with( $credential, 'cfk_' ) ) {
+		return true;
+	}
+
+	if ( str_starts_with( $credential, 'cfut_' ) || str_starts_with( $credential, 'cfat_' ) ) {
+		return false;
+	}
+
+	$length = strlen( $credential );
+	return $length >= 37 && $length <= 45 && 1 === preg_match( '/^[0-9a-f]+$/', $credential );
 }
 
 /**
@@ -188,12 +215,43 @@ function mcp_cloudflare_is_invalid_header_error( $body ): bool {
 }
 
 /**
+ * Determine whether a Cloudflare response should retry with alternate auth.
+ *
+ * @param mixed $body Decoded response body.
+ * @return bool
+ */
+function mcp_cloudflare_is_auth_retry_error( $body ): bool {
+	if ( mcp_cloudflare_is_invalid_header_error( $body ) ) {
+		return true;
+	}
+
+	$body = mcp_cloudflare_normalize_data( $body );
+	if ( empty( $body['errors'] ) || ! is_array( $body['errors'] ) ) {
+		return false;
+	}
+
+	foreach ( $body['errors'] as $error ) {
+		if ( ! is_array( $error ) ) {
+			continue;
+		}
+
+		$code    = isset( $error['code'] ) ? (int) $error['code'] : 0;
+		$message = isset( $error['message'] ) ? strtolower( (string) $error['message'] ) : '';
+
+		if ( 10000 === $code || str_contains( $message, 'authentication error' ) ) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
  * Return auth modes to try, in order.
  *
- * The official Cloudflare plugin has historically used email + global API key,
- * while newer installs may use an API token. Some installs store the token in
- * the legacy key option, so we retry as Bearer auth only when Cloudflare says
- * the request headers are invalid.
+ * The official Cloudflare plugin stores both Global API Keys and API Tokens in
+ * cloudflare_api_key. Match its credential-format check so token installs use
+ * Bearer auth immediately instead of trying X-Auth-Key first.
  *
  * @param array $context Cloudflare context.
  * @return array
@@ -205,13 +263,16 @@ function mcp_cloudflare_auth_modes( array $context ): array {
 		$modes[] = 'token';
 	}
 
-	if ( ! empty( $context['api_email'] ) && ! empty( $context['api_key'] ) ) {
+	if ( ! empty( $context['api_key'] ) && ! mcp_cloudflare_is_global_api_key( $context['api_key'] ) ) {
+		$modes[] = 'token';
+	}
+
+	if ( ! empty( $context['api_email'] ) && ! empty( $context['api_key'] ) && mcp_cloudflare_is_global_api_key( $context['api_key'] ) ) {
 		$modes[] = 'key';
 	}
 
-	if ( empty( $context['api_token'] ) && ! empty( $context['api_key'] ) ) {
-		$modes[]              = 'token';
-		$context['api_token'] = $context['api_key'];
+	if ( ! empty( $context['api_email'] ) && ! empty( $context['api_key'] ) ) {
+		$modes[] = mcp_cloudflare_is_global_api_key( $context['api_key'] ) ? 'token' : 'key';
 	}
 
 	return array_values( array_unique( $modes ) );
@@ -251,7 +312,7 @@ function mcp_cloudflare_api_request( string $method, string $url, array $context
 		$body = mcp_cloudflare_normalize_data( $body );
 		$body = is_array( $body ) ? $body : null;
 
-		if ( empty( $body['success'] ) && mcp_cloudflare_is_invalid_header_error( $body ) && isset( $modes[ $index + 1 ] ) ) {
+		if ( empty( $body['success'] ) && mcp_cloudflare_is_auth_retry_error( $body ) && isset( $modes[ $index + 1 ] ) ) {
 			continue;
 		}
 
@@ -315,7 +376,13 @@ function mcp_cloudflare_get_context() {
 	$zone_id   = mcp_cloudflare_get_config_value( 'cloudflare_zone_id', 'CLOUDFLARE_ZONE_ID' );
 	$domain    = mcp_cloudflare_get_config_value( 'cloudflare_cached_domain_name', 'CLOUDFLARE_DOMAIN_NAME' );
 
-	if ( empty( $api_token ) && ( empty( $api_email ) || empty( $api_key ) ) ) {
+	if (
+		empty( $api_token ) &&
+		(
+			empty( $api_key ) ||
+			( mcp_cloudflare_is_global_api_key( $api_key ) && empty( $api_email ) )
+		)
+	) {
 		return new WP_Error( 'cloudflare_missing_credentials', 'Cloudflare API credentials not configured. Install and configure the Cloudflare plugin first.' );
 	}
 

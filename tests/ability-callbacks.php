@@ -14,7 +14,7 @@ $registered_abilities = array();
 $remote_requests      = array();
 $options              = array(
 	'cloudflare_api_email'          => 'admin@example.com',
-	'cloudflare_api_key'            => 'global-key',
+	'cloudflare_api_key'            => str_repeat( 'a', 40 ),
 	'cloudflare_api_token'          => '',
 	'cloudflare_zone_id'            => '',
 	'cloudflare_cached_domain_name' => 'example.com',
@@ -115,6 +115,13 @@ function wp_remote_request( string $url, array $args ) {
 	}
 
 	if ( str_ends_with( $url, '/purge_cache' ) ) {
+		$headers = $args['headers'] ?? array();
+		if ( str_repeat( 'b', 40 ) === ( $headers['X-Auth-Key'] ?? '' ) ) {
+			return array(
+				'body' => '{"success":false,"errors":[{"code":10000,"message":"Authentication error"}]}',
+			);
+		}
+
 		return array(
 			'body' => '{"success":true,"result":{"id":"purge-123"}}',
 		);
@@ -140,11 +147,16 @@ assert( isset( $registered_abilities['cloudflare/clear-cache'] ) );
 
 foreach ( array( 'cloudflare/get-zone', 'cloudflare/get-development-mode' ) as $ability_name ) {
 	$schema = $registered_abilities[ $ability_name ]['input_schema'];
-	assert( 'object' === $schema['type'] );
+	assert( array( 'object', 'array', 'null' ) === $schema['type'] );
 	assert( is_array( $schema['properties'] ) );
 	assert( ! empty( $schema['properties']['_ignored'] ) );
 	assert( false === $schema['additionalProperties'] );
+	assert( 0 === $schema['maxItems'] );
 }
+
+assert( mcp_cloudflare_is_global_api_key( str_repeat( 'a', 40 ) ) );
+assert( ! mcp_cloudflare_is_global_api_key( 'cfut_' . str_repeat( 'A', 40 ) ) );
+assert( ! mcp_cloudflare_is_global_api_key( str_repeat( 'A', 40 ) ) );
 
 $get_zone = $registered_abilities['cloudflare/get-zone']['execute_callback'];
 $zone     = $get_zone( new stdClass() );
@@ -168,5 +180,38 @@ $clear_input->purge_everything = true;
 $clear_cache                   = $registered_abilities['cloudflare/clear-cache']['execute_callback'];
 $clear_result                  = $clear_cache( $clear_input );
 assert( true === $clear_result['success'] );
+
+$remote_requests = array();
+$options['cloudflare_api_key']   = 'cfut_' . str_repeat( 'A', 40 );
+$options['cloudflare_api_token'] = '';
+$options['cloudflare_zone_id']   = 'zone-123';
+$token_result                    = $clear_cache( array( 'purge_everything' => true ) );
+$token_headers                   = $remote_requests[0]['args']['headers'] ?? array();
+assert( true === $token_result['success'] );
+assert( isset( $token_headers['Authorization'] ) );
+assert( 'Bearer ' . $options['cloudflare_api_key'] === $token_headers['Authorization'] );
+assert( ! isset( $token_headers['X-Auth-Key'] ) );
+
+$remote_requests = array();
+$options['cloudflare_api_email'] = 'admin@example.com';
+$options['cloudflare_api_key']   = str_repeat( 'b', 40 );
+$options['cloudflare_api_token'] = '';
+$options['cloudflare_zone_id']   = 'zone-123';
+$fallback_result                 = mcp_cloudflare_api_request(
+	'POST',
+	'https://api.cloudflare.com/client/v4/zones/zone-123/purge_cache',
+	array(
+		'api_email' => $options['cloudflare_api_email'],
+		'api_key'   => $options['cloudflare_api_key'],
+		'api_token' => '',
+	),
+	array( 'body' => '{"purge_everything":true}' )
+);
+$first_headers                   = $remote_requests[0]['args']['headers'] ?? array();
+$second_headers                  = $remote_requests[1]['args']['headers'] ?? array();
+assert( is_array( $fallback_result ) );
+assert( 'token' === $fallback_result['auth_mode'] );
+assert( $options['cloudflare_api_key'] === ( $first_headers['X-Auth-Key'] ?? '' ) );
+assert( 'Bearer ' . $options['cloudflare_api_key'] === ( $second_headers['Authorization'] ?? '' ) );
 
 echo "ability callback regression passed\n";
