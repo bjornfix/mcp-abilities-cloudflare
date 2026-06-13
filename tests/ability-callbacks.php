@@ -77,6 +77,10 @@ function sanitize_text_field( $value ): string {
 	return trim( strip_tags( (string) $value ) );
 }
 
+function sanitize_key( $value ): string {
+	return preg_replace( '/[^a-z0-9_\\-]/', '', strtolower( (string) $value ) );
+}
+
 function esc_url_raw( $value ): string {
 	return trim( (string) $value );
 }
@@ -110,7 +114,29 @@ function wp_remote_request( string $url, array $args ) {
 
 	if ( str_ends_with( $url, '/settings/development_mode' ) ) {
 		return array(
-			'body' => '{"success":true,"result":{"id":"development_mode","value":"off"}}',
+			'headers' => array(),
+			'body'    => '{"success":true,"result":{"id":"development_mode","value":"off"}}',
+		);
+	}
+
+	if ( str_contains( $url, '/settings/browser_cache_ttl' ) ) {
+		return array(
+			'headers' => array(),
+			'body'    => '{"success":true,"result":{"id":"browser_cache_ttl","value":14400}}',
+		);
+	}
+
+	if ( str_ends_with( $url, '/rulesets' ) ) {
+		return array(
+			'headers' => array(),
+			'body'    => '{"success":true,"result":[{"id":"ruleset-1","phase":"http_request_cache_settings","kind":"zone","name":"Cache rules"}]}',
+		);
+	}
+
+	if ( str_contains( $url, '/rulesets/phases/http_request_cache_settings/entrypoint' ) ) {
+		return array(
+			'headers' => array(),
+			'body'    => '{"success":true,"result":{"id":"entrypoint-1","phase":"http_request_cache_settings","rules":[]}}',
 		);
 	}
 
@@ -127,6 +153,20 @@ function wp_remote_request( string $url, array $args ) {
 		);
 	}
 
+	if ( str_starts_with( $url, 'https://example.com/' ) ) {
+		return array(
+			'headers'  => array(
+				'cf-cache-status' => 'DYNAMIC',
+				'cache-control'   => 'no-cache',
+				'cf-ray'          => 'test-ray',
+				'server'          => 'cloudflare',
+				'content-type'    => 'text/html; charset=UTF-8',
+			),
+			'response' => array( 'code' => 200 ),
+			'body'     => '<html></html>',
+		);
+	}
+
 	return array(
 		'body' => '{"success":false,"errors":[{"code":1000,"message":"unexpected test URL"}]}',
 	);
@@ -136,12 +176,23 @@ function wp_remote_retrieve_body( array $response ): string {
 	return (string) ( $response['body'] ?? '' );
 }
 
+function wp_remote_retrieve_headers( array $response ): array {
+	return $response['headers'] ?? array();
+}
+
+function wp_remote_retrieve_response_code( array $response ): int {
+	return (int) ( $response['response']['code'] ?? 200 );
+}
+
 require dirname( __DIR__ ) . '/mcp-abilities-cloudflare.php';
 
 mcp_register_cloudflare_abilities();
 
 assert( isset( $registered_abilities['cloudflare/get-zone'] ) );
 assert( isset( $registered_abilities['cloudflare/get-development-mode'] ) );
+assert( isset( $registered_abilities['cloudflare/get-cache-settings'] ) );
+assert( isset( $registered_abilities['cloudflare/get-cache-rulesets'] ) );
+assert( isset( $registered_abilities['cloudflare/test-url-cache-status'] ) );
 assert( isset( $registered_abilities['cloudflare/set-development-mode'] ) );
 assert( isset( $registered_abilities['cloudflare/clear-cache'] ) );
 
@@ -167,6 +218,27 @@ $get_development_mode = $registered_abilities['cloudflare/get-development-mode']
 $development_mode     = $get_development_mode( new stdClass() );
 assert( true === $development_mode['success'] );
 assert( 'off' === $development_mode['value'] );
+
+$get_cache_settings = $registered_abilities['cloudflare/get-cache-settings']['execute_callback'];
+$cache_settings     = $get_cache_settings( array( 'settings' => array( 'browser_cache_ttl' ) ) );
+assert( true === $cache_settings['success'] );
+assert( 14400 === $cache_settings['settings'][0]['setting']['value'] );
+
+$get_cache_rulesets = $registered_abilities['cloudflare/get-cache-rulesets']['execute_callback'];
+$cache_rulesets     = $get_cache_rulesets( new stdClass() );
+assert( true === $cache_rulesets['success'] );
+assert( 'http_request_cache_settings' === $cache_rulesets['rulesets'][0]['phase'] );
+assert( true === $cache_rulesets['entrypoint']['success'] );
+
+$test_url_cache = $registered_abilities['cloudflare/test-url-cache-status']['execute_callback'];
+$url_status     = $test_url_cache(
+	array(
+		'urls'   => array( 'https://example.com/' ),
+		'repeat' => 1,
+	)
+);
+assert( true === $url_status['success'] );
+assert( 'DYNAMIC' === $url_status['results'][0]['attempts'][0]['cf_cache_status'] );
 
 $set_input        = new stdClass();
 $set_input->value = 'on';

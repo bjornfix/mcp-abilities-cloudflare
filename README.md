@@ -1,6 +1,6 @@
 # MCP Abilities - Cloudflare
 
-Cloudflare abilities for MCP. Clear cache for entire site or specific URLs.
+Cloudflare abilities for MCP. Inspect and clear Cloudflare cache for WordPress sites.
 
 [![GitHub release](https://img.shields.io/github/v/release/bjornfix/mcp-abilities-cloudflare)](https://github.com/bjornfix/mcp-abilities-cloudflare/releases)
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/gpl-2.0)
@@ -8,13 +8,13 @@ Cloudflare abilities for MCP. Clear cache for entire site or specific URLs.
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
 
 **Tested up to:** 7.0
-**Stable tag:** 1.0.8
+**Stable tag:** 1.0.9
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
 ## What It Does
 
-Cloudflare abilities for MCP. Clear cache for entire site or specific URLs.
+Cloudflare abilities for MCP. Inspect and clear Cloudflare cache for WordPress sites.
 
 This plugin is part of the Devenia MCP abilities ecosystem. It gives an MCP-capable agent a focused, authenticated way to work with Cloudflare work inside WordPress through MCP.
 
@@ -107,13 +107,16 @@ If you are new to the stack, use this order:
 
 If you skip base-stack verification and start with add-ons immediately, troubleshooting gets harder than it needs to be.
 
-## Abilities (4)
+## Abilities (7)
 
 | Ability | Description |
 |---------|-------------|
 | `cloudflare/clear-cache` | Purge entire Cloudflare cache or specific URLs |
 | `cloudflare/get-zone` | Get active Cloudflare zone details |
 | `cloudflare/get-development-mode` | Read current Cloudflare Development Mode status |
+| `cloudflare/get-cache-settings` | Read relevant Cloudflare cache/performance zone settings |
+| `cloudflare/get-cache-rulesets` | Read Cloudflare rulesets and the cache-settings entrypoint |
+| `cloudflare/test-url-cache-status` | Probe public URLs and report Cloudflare cache headers |
 | `cloudflare/set-development-mode` | Enable or disable Cloudflare Development Mode |
 
 ## Usage Examples
@@ -145,6 +148,11 @@ If you skip base-stack verification and start with add-ons immediately, troubles
 ```
 
 ## Changelog
+
+### 1.0.9
+- Added read-only cache diagnostics for Cloudflare zone cache settings.
+- Added read-only ruleset inspection for the `http_request_cache_settings` entrypoint.
+- Added URL cache-status probes that report `cf-cache-status`, `cache-control`, `age`, `set-cookie`, and related headers.
 
 ### 1.0.8
 - Fixed Cloudflare API Token installs where the official Cloudflare plugin stores the token in `cloudflare_api_key`.

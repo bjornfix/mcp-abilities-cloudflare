@@ -2,8 +2,8 @@
 /**
  * Plugin Name: MCP Abilities - Cloudflare
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-cloudflare
- * Description: Cloudflare abilities for MCP. Clear cache for entire site or specific URLs.
- * Version: 1.0.8
+ * Description: Cloudflare abilities for MCP. Inspect and clear Cloudflare cache for WordPress sites.
+ * Version: 1.0.9
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -410,6 +410,58 @@ function mcp_cloudflare_get_context() {
 }
 
 /**
+ * Normalize an HTTP response header value to a short string.
+ *
+ * @param mixed $value Header value.
+ * @return string
+ */
+function mcp_cloudflare_header_value( $value ): string {
+	if ( is_array( $value ) ) {
+		$value = implode( ', ', array_map( 'strval', $value ) );
+	}
+
+	return sanitize_text_field( (string) $value );
+}
+
+/**
+ * Fetch a single Cloudflare zone setting.
+ *
+ * @param array  $context Cloudflare context.
+ * @param string $setting Setting ID.
+ * @return array
+ */
+function mcp_cloudflare_get_zone_setting( array $context, string $setting ): array {
+	$result = mcp_cloudflare_api_request(
+		'GET',
+		'https://api.cloudflare.com/client/v4/zones/' . $context['zone_id'] . '/settings/' . rawurlencode( $setting ),
+		$context
+	);
+
+	if ( is_wp_error( $result ) ) {
+		return array(
+			'success' => false,
+			'id'      => $setting,
+			'message' => $result->get_error_message(),
+		);
+	}
+
+	$body = $result['body'];
+	if ( empty( $body['success'] ) || empty( $body['result'] ) ) {
+		return array(
+			'success' => false,
+			'id'      => $setting,
+			'message' => 'Cloudflare API error: ' . mcp_cloudflare_api_error_message( $body ),
+		);
+	}
+
+	return array(
+		'success' => true,
+		'id'      => $setting,
+		'setting' => $body['result'],
+	);
+}
+
+/**
  * Register Cloudflare abilities.
  */
 function mcp_register_cloudflare_abilities(): void {
@@ -701,6 +753,332 @@ function mcp_register_cloudflare_abilities(): void {
 					'readonly'    => true,
 					'destructive' => false,
 					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// CLOUDFLARE - Get Cache Settings
+	// =========================================================================
+	wp_register_ability(
+		'cloudflare/get-cache-settings',
+		array(
+			'label'               => 'Get Cloudflare Cache Settings',
+			'description'         => 'Fetch relevant Cloudflare zone cache settings for diagnosis.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => array( 'object', 'array', 'null' ),
+				'properties'           => array(
+					'settings' => array(
+						'type'        => 'array',
+						'items'       => array( 'type' => 'string' ),
+						'description' => 'Optional setting IDs to fetch. Defaults to common cache/performance settings.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'  => array( 'type' => 'boolean' ),
+					'settings' => array( 'type' => 'array' ),
+					'message'  => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = mcp_cloudflare_normalize_input( $input );
+
+				$context = mcp_cloudflare_get_context();
+				if ( is_wp_error( $context ) ) {
+					return array(
+						'success' => false,
+						'message' => $context->get_error_message(),
+					);
+				}
+
+				$default_settings = array(
+					'cache_level',
+					'browser_cache_ttl',
+					'development_mode',
+					'always_online',
+					'brotli',
+					'early_hints',
+					'automatic_platform_optimization',
+				);
+				$settings         = isset( $input['settings'] ) && is_array( $input['settings'] )
+					? array_values(
+						array_filter(
+							array_map(
+								static function ( $setting ) {
+									return is_string( $setting ) ? sanitize_key( $setting ) : '';
+								},
+								$input['settings']
+							)
+						)
+					)
+					: $default_settings;
+				$settings         = array_slice( array_values( array_unique( $settings ) ), 0, 25 );
+				$results          = array();
+				$successful       = 0;
+
+				foreach ( $settings as $setting ) {
+					$result = mcp_cloudflare_get_zone_setting( $context, $setting );
+					if ( ! empty( $result['success'] ) ) {
+						++$successful;
+					}
+					$results[] = $result;
+				}
+
+				return array(
+					'success'  => $successful > 0,
+					'settings' => $results,
+					'message'  => sprintf(
+						'Retrieved %1$d of %2$d requested Cloudflare setting(s).',
+						$successful,
+						count( $settings )
+					),
+				);
+			},
+			'permission_callback' => 'mcp_cloudflare_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// CLOUDFLARE - Get Cache Rulesets
+	// =========================================================================
+	wp_register_ability(
+		'cloudflare/get-cache-rulesets',
+		array(
+			'label'               => 'Get Cloudflare Cache Rulesets',
+			'description'         => 'Fetch Cloudflare rulesets and the cache-settings entrypoint ruleset for the zone.',
+			'category'            => 'site',
+			'input_schema'        => mcp_cloudflare_empty_input_schema(),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'    => array( 'type' => 'boolean' ),
+					'rulesets'   => array( 'type' => 'array' ),
+					'entrypoint' => array( 'type' => 'object' ),
+					'message'    => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = mcp_cloudflare_normalize_input( $input );
+
+				$context = mcp_cloudflare_get_context();
+				if ( is_wp_error( $context ) ) {
+					return array(
+						'success' => false,
+						'message' => $context->get_error_message(),
+					);
+				}
+
+				$list_result = mcp_cloudflare_api_request(
+					'GET',
+					'https://api.cloudflare.com/client/v4/zones/' . $context['zone_id'] . '/rulesets',
+					$context
+				);
+
+				if ( is_wp_error( $list_result ) ) {
+					return array(
+						'success' => false,
+						'message' => $list_result->get_error_message(),
+					);
+				}
+
+				$list_body = $list_result['body'];
+				if ( empty( $list_body['success'] ) ) {
+					return array(
+						'success' => false,
+						'message' => 'Cloudflare API error: ' . mcp_cloudflare_api_error_message( $list_body ),
+					);
+				}
+
+				$entrypoint_result = mcp_cloudflare_api_request(
+					'GET',
+					'https://api.cloudflare.com/client/v4/zones/' . $context['zone_id'] . '/rulesets/phases/http_request_cache_settings/entrypoint',
+					$context
+				);
+				$entrypoint        = array(
+					'success' => false,
+					'message' => 'Cache-settings entrypoint ruleset not found or not readable.',
+				);
+
+				if ( is_wp_error( $entrypoint_result ) ) {
+					$entrypoint['message'] = $entrypoint_result->get_error_message();
+				} elseif ( ! empty( $entrypoint_result['body']['success'] ) && ! empty( $entrypoint_result['body']['result'] ) ) {
+					$entrypoint = array(
+						'success' => true,
+						'ruleset' => $entrypoint_result['body']['result'],
+					);
+				} else {
+					$entrypoint['message'] = 'Cloudflare API error: ' . mcp_cloudflare_api_error_message( $entrypoint_result['body'] ?? null );
+				}
+
+				return array(
+					'success'    => true,
+					'rulesets'   => $list_body['result'] ?? array(),
+					'entrypoint' => $entrypoint,
+					'message'    => 'Cloudflare rulesets retrieved.',
+				);
+			},
+			'permission_callback' => 'mcp_cloudflare_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// CLOUDFLARE - Test URL Cache Status
+	// =========================================================================
+	wp_register_ability(
+		'cloudflare/test-url-cache-status',
+		array(
+			'label'               => 'Test Cloudflare URL Cache Status',
+			'description'         => 'Fetch public URLs and report Cloudflare cache/status headers without purging or changing settings.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'urls' ),
+				'properties'           => array(
+					'urls'   => array(
+						'type'        => 'array',
+						'items'       => array( 'type' => 'string' ),
+						'description' => 'Public URLs to fetch. Maximum 20.',
+					),
+					'repeat' => array(
+						'type'        => 'integer',
+						'default'     => 2,
+						'minimum'     => 1,
+						'maximum'     => 3,
+						'description' => 'Fetch count per URL, useful for MISS-to-HIT checks.',
+					),
+					'method' => array(
+						'type'        => 'string',
+						'enum'        => array( 'GET', 'HEAD' ),
+						'default'     => 'GET',
+						'description' => 'HTTP method to use.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'results' => array( 'type' => 'array' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input  = mcp_cloudflare_normalize_input( $input );
+				$urls   = isset( $input['urls'] ) && is_array( $input['urls'] )
+					? array_values(
+						array_filter(
+							array_map(
+								static function ( $url ) {
+									return is_string( $url ) ? esc_url_raw( $url ) : '';
+								},
+								$input['urls']
+							)
+						)
+					)
+					: array();
+				$urls   = array_slice( array_values( array_unique( $urls ) ), 0, 20 );
+				$repeat = isset( $input['repeat'] ) ? max( 1, min( 3, (int) $input['repeat'] ) ) : 2;
+				$method = isset( $input['method'] ) && 'HEAD' === strtoupper( (string) $input['method'] ) ? 'HEAD' : 'GET';
+
+				if ( empty( $urls ) ) {
+					return array(
+						'success' => false,
+						'message' => 'At least one URL is required.',
+					);
+				}
+
+				$results = array();
+				foreach ( $urls as $url ) {
+					$attempts = array();
+					for ( $i = 1; $i <= $repeat; $i++ ) {
+						$response = wp_remote_request(
+							$url,
+							array(
+								'method'      => $method,
+								'timeout'     => 30,
+								'redirection' => 5,
+								'headers'     => array(
+									'User-Agent' => 'Devenia MCP Cloudflare Cache Probe/1.0',
+									'Accept'     => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+								),
+							)
+						);
+
+						if ( is_wp_error( $response ) ) {
+							$attempts[] = array(
+								'attempt' => $i,
+								'success' => false,
+								'message' => $response->get_error_message(),
+							);
+							continue;
+						}
+
+						$headers    = function_exists( 'wp_remote_retrieve_headers' ) ? wp_remote_retrieve_headers( $response ) : array();
+						$header_map = array();
+						if ( is_object( $headers ) && method_exists( $headers, 'getAll' ) ) {
+							$header_map = $headers->getAll();
+						} elseif ( is_array( $headers ) ) {
+							$header_map = $headers;
+						}
+						$normalized_headers = array();
+						foreach ( $header_map as $name => $value ) {
+							$normalized_headers[ strtolower( (string) $name ) ] = mcp_cloudflare_header_value( $value );
+						}
+
+						$attempts[] = array(
+							'attempt'         => $i,
+							'success'         => true,
+							'status_code'     => function_exists( 'wp_remote_retrieve_response_code' ) ? (int) wp_remote_retrieve_response_code( $response ) : 0,
+							'cf_cache_status' => $normalized_headers['cf-cache-status'] ?? '',
+							'cache_control'   => $normalized_headers['cache-control'] ?? '',
+							'age'             => $normalized_headers['age'] ?? '',
+							'cf_ray'          => $normalized_headers['cf-ray'] ?? '',
+							'server'          => $normalized_headers['server'] ?? '',
+							'content_type'    => $normalized_headers['content-type'] ?? '',
+							'vary'            => $normalized_headers['vary'] ?? '',
+							'set_cookie'      => array_key_exists( 'set-cookie', $normalized_headers ),
+						);
+					}
+
+					$results[] = array(
+						'url'      => $url,
+						'attempts' => $attempts,
+					);
+				}
+
+				return array(
+					'success' => true,
+					'results' => $results,
+					'message' => 'URL cache status probe complete.',
+				);
+			},
+			'permission_callback' => 'mcp_cloudflare_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => false,
 				),
 			),
 		)

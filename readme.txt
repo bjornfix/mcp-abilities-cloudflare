@@ -3,16 +3,16 @@ Contributors: devenia
 Tags: mcp, cloudflare, cache, ai, automation
 Requires at least: 6.9
 Tested up to: 7.0
-Stable tag: 1.0.8
+Stable tag: 1.0.9
 Requires PHP: 8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Cloudflare cache management for WordPress via MCP.
+Cloudflare cache diagnostics and cache management for WordPress via MCP.
 
 == Description ==
 
-This add-on plugin exposes Cloudflare cache management through MCP (Model Context Protocol). Tell your AI assistant "clear the Cloudflare cache" and it happens instantly.
+This add-on plugin exposes Cloudflare cache diagnostics and cache management through MCP (Model Context Protocol).
 
 Part of the MCP Expose Abilities ecosystem.
 
@@ -24,6 +24,11 @@ Part of the MCP Expose Abilities ecosystem.
 4. Activate the plugin
 
 == Changelog ==
+
+= 1.0.9 =
+* Added: read-only Cloudflare cache settings diagnostics.
+* Added: read-only Cloudflare cache ruleset and cache-settings entrypoint inspection.
+* Added: URL cache-status probes for `cf-cache-status`, `cache-control`, `age`, `set-cookie`, and related headers.
 
 = 1.0.8 =
 * Fixed: API Token installs now work when the official Cloudflare plugin stores the token in `cloudflare_api_key`.
