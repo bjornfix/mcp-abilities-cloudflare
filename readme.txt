@@ -3,7 +3,7 @@ Contributors: devenia
 Tags: mcp, cloudflare, cache, ai, automation
 Requires at least: 6.9
 Tested up to: 7.0
-Stable tag: 1.0.9
+Stable tag: 1.0.10
 Requires PHP: 8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -24,6 +24,10 @@ Part of the MCP Expose Abilities ecosystem.
 4. Activate the plugin
 
 == Changelog ==
+
+= 1.0.10 =
+* Added: `cloudflare/ensure-wordpress-html-cache-rule` with dry-run by default.
+* Added: the new cache-rule ability preserves existing rules and only targets anonymous public WordPress HTML requests.
 
 = 1.0.9 =
 * Added: read-only Cloudflare cache settings diagnostics.

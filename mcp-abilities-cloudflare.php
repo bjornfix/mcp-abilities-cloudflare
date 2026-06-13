@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Cloudflare
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-cloudflare
  * Description: Cloudflare abilities for MCP. Inspect and clear Cloudflare cache for WordPress sites.
- * Version: 1.0.9
+ * Version: 1.0.10
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -459,6 +459,110 @@ function mcp_cloudflare_get_zone_setting( array $context, string $setting ): arr
 		'id'      => $setting,
 		'setting' => $body['result'],
 	);
+}
+
+/**
+ * Build the default public WordPress HTML cache rule.
+ *
+ * @param string $host             Hostname to cache.
+ * @param int    $edge_ttl_seconds Edge TTL for successful responses.
+ * @param bool   $enabled          Whether the rule should be enabled.
+ * @param string $description      Rule description.
+ * @param string $ref              Stable rule reference.
+ * @return array
+ */
+function mcp_cloudflare_build_wordpress_html_cache_rule( string $host, int $edge_ttl_seconds, bool $enabled, string $description, string $ref ): array {
+	$edge_ttl_seconds = max( 60, min( 86400, $edge_ttl_seconds ) );
+	$expression_parts = array(
+		'(http.host eq "' . addcslashes( $host, "\\\"" ) . '")',
+		'((http.request.method eq "GET") or (http.request.method eq "HEAD"))',
+		'((http.request.uri.path.extension eq "") or (http.request.uri.path.extension eq "html"))',
+		'(http.request.uri.query eq "")',
+		'(not starts_with(http.request.uri.path, "/wp-admin"))',
+		'(http.request.uri.path ne "/wp-login.php")',
+		'(not starts_with(http.request.uri.path, "/wp-json"))',
+		'(http.request.uri.path ne "/xmlrpc.php")',
+		'(http.request.uri.path ne "/wp-cron.php")',
+		'(http.request.uri.path ne "/feed")',
+		'(not ends_with(http.request.uri.path, "/feed/"))',
+		'(not http.cookie contains "wordpress_logged_in_")',
+		'(not http.cookie contains "wordpress_sec_")',
+		'(not http.cookie contains "wp-postpass_")',
+		'(not http.cookie contains "comment_author_")',
+		'(not http.cookie contains "woocommerce_")',
+		'(not http.cookie contains "wp_woocommerce_session_")',
+	);
+
+	return array(
+		'ref'               => $ref,
+		'description'       => $description,
+		'expression'        => implode( ' and ', $expression_parts ),
+		'action'            => 'set_cache_settings',
+		'action_parameters' => array(
+			'cache'       => true,
+			'edge_ttl'    => array(
+				'mode'            => 'override_origin',
+				'default'         => $edge_ttl_seconds,
+				'status_code_ttl' => array(
+					array(
+						'status_code_range' => array(
+							'from' => 200,
+							'to'   => 299,
+						),
+						'value'             => $edge_ttl_seconds,
+					),
+					array(
+						'status_code_range' => array(
+							'from' => 300,
+							'to'   => 399,
+						),
+						'value'             => 300,
+					),
+					array(
+						'status_code_range' => array(
+							'from' => 400,
+							'to'   => 499,
+						),
+						'value'             => 0,
+					),
+					array(
+						'status_code_range' => array(
+							'from' => 500,
+						),
+						'value'             => -1,
+					),
+				),
+			),
+			'browser_ttl' => array(
+				'mode' => 'respect_origin',
+			),
+		),
+		'enabled'           => $enabled,
+	);
+}
+
+/**
+ * Fetch the cache-settings entrypoint ruleset.
+ *
+ * @param array $context Cloudflare context.
+ * @return array|WP_Error
+ */
+function mcp_cloudflare_get_cache_entrypoint_ruleset( array $context ) {
+	$result = mcp_cloudflare_api_request(
+		'GET',
+		'https://api.cloudflare.com/client/v4/zones/' . $context['zone_id'] . '/rulesets/phases/http_request_cache_settings/entrypoint',
+		$context
+	);
+
+	if ( is_wp_error( $result ) ) {
+		return $result;
+	}
+
+	if ( empty( $result['body']['success'] ) || empty( $result['body']['result'] ) || ! is_array( $result['body']['result'] ) ) {
+		return new WP_Error( 'cloudflare_cache_ruleset', 'Cloudflare API error: ' . mcp_cloudflare_api_error_message( $result['body'] ?? null ) );
+	}
+
+	return $result['body']['result'];
 }
 
 /**
@@ -1079,6 +1183,195 @@ function mcp_register_cloudflare_abilities(): void {
 					'readonly'    => true,
 					'destructive' => false,
 					'idempotent'  => false,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// CLOUDFLARE - Ensure WordPress HTML Cache Rule
+	// =========================================================================
+	wp_register_ability(
+		'cloudflare/ensure-wordpress-html-cache-rule',
+		array(
+			'label'               => 'Ensure WordPress HTML Cache Rule',
+			'description'         => 'Create or update a conservative Cloudflare cache rule for public anonymous WordPress HTML pages.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => array(
+					'host'             => array(
+						'type'        => 'string',
+						'description' => 'Hostname to cache. Defaults to the configured Cloudflare domain.',
+					),
+					'edge_ttl_seconds' => array(
+						'type'        => 'integer',
+						'default'     => 3600,
+						'minimum'     => 60,
+						'maximum'     => 86400,
+						'description' => 'Edge TTL for successful anonymous HTML responses.',
+					),
+					'enabled'          => array(
+						'type'        => 'boolean',
+						'default'     => true,
+						'description' => 'Whether the rule should be enabled.',
+					),
+					'dry_run'          => array(
+						'type'        => 'boolean',
+						'default'     => true,
+						'description' => 'When true, return the proposed ruleset without writing to Cloudflare.',
+					),
+					'description'      => array(
+						'type'        => 'string',
+						'description' => 'Cloudflare rule description.',
+					),
+					'ref'              => array(
+						'type'        => 'string',
+						'description' => 'Stable Cloudflare rule reference used for idempotent updates.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'       => array( 'type' => 'boolean' ),
+					'message'       => array( 'type' => 'string' ),
+					'dry_run'       => array( 'type' => 'boolean' ),
+					'host'          => array( 'type' => 'string' ),
+					'ruleset_id'    => array( 'type' => 'string' ),
+					'action'        => array( 'type' => 'string' ),
+					'rule'          => array( 'type' => 'object' ),
+					'existing_rule' => array( 'type' => 'object' ),
+					'rule_count'    => array( 'type' => 'integer' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = mcp_cloudflare_normalize_input( $input );
+
+				$context = mcp_cloudflare_get_context();
+				if ( is_wp_error( $context ) ) {
+					return array(
+						'success' => false,
+						'message' => $context->get_error_message(),
+					);
+				}
+
+				$host = isset( $input['host'] ) && is_string( $input['host'] )
+					? strtolower( sanitize_text_field( $input['host'] ) )
+					: strtolower( (string) ( $context['domain'] ?? '' ) );
+				if ( '' === $host || ! preg_match( '/^[a-z0-9.-]+$/', $host ) ) {
+					return array(
+						'success' => false,
+						'message' => 'A valid hostname is required.',
+					);
+				}
+
+				$edge_ttl_seconds = isset( $input['edge_ttl_seconds'] ) ? (int) $input['edge_ttl_seconds'] : 3600;
+				$enabled          = isset( $input['enabled'] ) ? (bool) $input['enabled'] : true;
+				$dry_run          = ! array_key_exists( 'dry_run', $input ) || (bool) $input['dry_run'];
+				$description      = isset( $input['description'] ) && is_string( $input['description'] )
+					? sanitize_text_field( $input['description'] )
+					: 'Devenia public WordPress HTML cache';
+				$ref              = isset( $input['ref'] ) && is_string( $input['ref'] )
+					? sanitize_key( $input['ref'] )
+					: 'devenia-public-wordpress-html-cache';
+
+				$ruleset = mcp_cloudflare_get_cache_entrypoint_ruleset( $context );
+				if ( is_wp_error( $ruleset ) ) {
+					return array(
+						'success' => false,
+						'message' => $ruleset->get_error_message(),
+					);
+				}
+
+				$existing_rules = isset( $ruleset['rules'] ) && is_array( $ruleset['rules'] ) ? $ruleset['rules'] : array();
+				$new_rule       = mcp_cloudflare_build_wordpress_html_cache_rule( $host, $edge_ttl_seconds, $enabled, $description, $ref );
+				$rules          = array();
+				$existing_rule  = null;
+				$action         = 'created';
+
+				foreach ( $existing_rules as $rule ) {
+					if ( ! is_array( $rule ) ) {
+						continue;
+					}
+
+					$matches_ref         = isset( $rule['ref'] ) && $ref === (string) $rule['ref'];
+					$matches_description = isset( $rule['description'] ) && $description === (string) $rule['description'];
+					if ( $matches_ref || $matches_description ) {
+						$existing_rule = $rule;
+						if ( isset( $rule['id'] ) ) {
+							$new_rule['id'] = $rule['id'];
+						}
+						$rules[] = $new_rule;
+						$action  = 'updated';
+						continue;
+					}
+
+					$rules[] = $rule;
+				}
+
+				if ( null === $existing_rule ) {
+					$rules[] = $new_rule;
+				}
+
+				if ( $dry_run ) {
+					return array(
+						'success'       => true,
+						'message'       => 'Dry run complete. No Cloudflare changes were made.',
+						'dry_run'       => true,
+						'host'          => $host,
+						'ruleset_id'    => (string) ( $ruleset['id'] ?? '' ),
+						'action'        => $action,
+						'rule'          => $new_rule,
+						'existing_rule' => $existing_rule ?? array(),
+						'rule_count'    => count( $rules ),
+					);
+				}
+
+				$update_result = mcp_cloudflare_api_request(
+					'PUT',
+					'https://api.cloudflare.com/client/v4/zones/' . $context['zone_id'] . '/rulesets/' . rawurlencode( (string) $ruleset['id'] ),
+					$context,
+					array(
+						'body'    => wp_json_encode( array( 'rules' => $rules ) ),
+						'timeout' => 30,
+					)
+				);
+
+				if ( is_wp_error( $update_result ) ) {
+					return array(
+						'success' => false,
+						'message' => $update_result->get_error_message(),
+					);
+				}
+
+				$body = $update_result['body'];
+				if ( empty( $body['success'] ) || empty( $body['result'] ) ) {
+					return array(
+						'success' => false,
+						'message' => 'Cloudflare API error: ' . mcp_cloudflare_api_error_message( $body ),
+					);
+				}
+
+				return array(
+					'success'       => true,
+					'message'       => 'Cloudflare WordPress HTML cache rule ' . $action . '.',
+					'dry_run'       => false,
+					'host'          => $host,
+					'ruleset_id'    => (string) ( $body['result']['id'] ?? $ruleset['id'] ?? '' ),
+					'action'        => $action,
+					'rule'          => $new_rule,
+					'existing_rule' => $existing_rule ?? array(),
+					'rule_count'    => isset( $body['result']['rules'] ) && is_array( $body['result']['rules'] ) ? count( $body['result']['rules'] ) : count( $rules ),
+				);
+			},
+			'permission_callback' => 'mcp_cloudflare_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => true,
 				),
 			),
 		)

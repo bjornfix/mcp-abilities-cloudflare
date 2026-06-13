@@ -136,7 +136,24 @@ function wp_remote_request( string $url, array $args ) {
 	if ( str_contains( $url, '/rulesets/phases/http_request_cache_settings/entrypoint' ) ) {
 		return array(
 			'headers' => array(),
-			'body'    => '{"success":true,"result":{"id":"entrypoint-1","phase":"http_request_cache_settings","rules":[]}}',
+			'body'    => '{"success":true,"result":{"id":"entrypoint-1","phase":"http_request_cache_settings","rules":[{"ref":"existing-rule","description":"Existing cache rule","expression":"(http.host eq \"static.example.com\")","action":"set_cache_settings","action_parameters":{"cache":true},"enabled":true}]}}',
+		);
+	}
+
+	if ( str_ends_with( $url, '/rulesets/entrypoint-1' ) ) {
+		$payload = json_decode( (string) ( $args['body'] ?? '{}' ), true, 512, JSON_THROW_ON_ERROR );
+		return array(
+			'headers' => array(),
+			'body'    => json_encode(
+				array(
+					'success' => true,
+					'result'  => array(
+						'id'    => 'entrypoint-1',
+						'rules' => $payload['rules'] ?? array(),
+					),
+				),
+				JSON_THROW_ON_ERROR
+			),
 		);
 	}
 
@@ -193,6 +210,7 @@ assert( isset( $registered_abilities['cloudflare/get-development-mode'] ) );
 assert( isset( $registered_abilities['cloudflare/get-cache-settings'] ) );
 assert( isset( $registered_abilities['cloudflare/get-cache-rulesets'] ) );
 assert( isset( $registered_abilities['cloudflare/test-url-cache-status'] ) );
+assert( isset( $registered_abilities['cloudflare/ensure-wordpress-html-cache-rule'] ) );
 assert( isset( $registered_abilities['cloudflare/set-development-mode'] ) );
 assert( isset( $registered_abilities['cloudflare/clear-cache'] ) );
 
@@ -239,6 +257,31 @@ $url_status     = $test_url_cache(
 );
 assert( true === $url_status['success'] );
 assert( 'DYNAMIC' === $url_status['results'][0]['attempts'][0]['cf_cache_status'] );
+
+$ensure_cache_rule = $registered_abilities['cloudflare/ensure-wordpress-html-cache-rule']['execute_callback'];
+$dry_rule          = $ensure_cache_rule( array() );
+assert( true === $dry_rule['success'] );
+assert( true === $dry_rule['dry_run'] );
+assert( 'created' === $dry_rule['action'] );
+assert( 2 === $dry_rule['rule_count'] );
+assert( str_contains( $dry_rule['rule']['expression'], 'wordpress_logged_in_' ) );
+
+$remote_requests = array();
+$write_rule      = $ensure_cache_rule(
+	array(
+		'dry_run'          => false,
+		'edge_ttl_seconds' => 7200,
+	)
+);
+assert( true === $write_rule['success'] );
+assert( false === $write_rule['dry_run'] );
+assert( 2 === $write_rule['rule_count'] );
+$put_request = end( $remote_requests );
+assert( str_ends_with( $put_request['url'], '/rulesets/entrypoint-1' ) );
+$put_body = json_decode( (string) $put_request['args']['body'], true, 512, JSON_THROW_ON_ERROR );
+assert( 'existing-rule' === $put_body['rules'][0]['ref'] );
+assert( 'devenia-public-wordpress-html-cache' === $put_body['rules'][1]['ref'] );
+assert( 7200 === $put_body['rules'][1]['action_parameters']['edge_ttl']['default'] );
 
 $set_input        = new stdClass();
 $set_input->value = 'on';

@@ -8,7 +8,7 @@ Cloudflare abilities for MCP. Inspect and clear Cloudflare cache for WordPress s
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
 
 **Tested up to:** 7.0
-**Stable tag:** 1.0.9
+**Stable tag:** 1.0.10
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -107,7 +107,7 @@ If you are new to the stack, use this order:
 
 If you skip base-stack verification and start with add-ons immediately, troubleshooting gets harder than it needs to be.
 
-## Abilities (7)
+## Abilities (8)
 
 | Ability | Description |
 |---------|-------------|
@@ -117,6 +117,7 @@ If you skip base-stack verification and start with add-ons immediately, troubles
 | `cloudflare/get-cache-settings` | Read relevant Cloudflare cache/performance zone settings |
 | `cloudflare/get-cache-rulesets` | Read Cloudflare rulesets and the cache-settings entrypoint |
 | `cloudflare/test-url-cache-status` | Probe public URLs and report Cloudflare cache headers |
+| `cloudflare/ensure-wordpress-html-cache-rule` | Create or update a conservative anonymous WordPress HTML cache rule |
 | `cloudflare/set-development-mode` | Enable or disable Cloudflare Development Mode |
 
 ## Usage Examples
@@ -148,6 +149,10 @@ If you skip base-stack verification and start with add-ons immediately, troubles
 ```
 
 ## Changelog
+
+### 1.0.10
+- Added `cloudflare/ensure-wordpress-html-cache-rule` with dry-run by default.
+- The new rule preserves existing Cloudflare cache rules and only targets anonymous public WordPress HTML requests.
 
 ### 1.0.9
 - Added read-only cache diagnostics for Cloudflare zone cache settings.
