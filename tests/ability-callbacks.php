@@ -228,6 +228,10 @@ assert( ! mcp_cloudflare_is_global_api_key( 'cfut_' . str_repeat( 'A', 40 ) ) );
 assert( ! mcp_cloudflare_is_global_api_key( str_repeat( 'A', 40 ) ) );
 assert( 'example.com/page/' === mcp_cloudflare_normalize_purge_prefix( 'https://example.com/page/' ) );
 assert( 'example.com/page/' === mcp_cloudflare_normalize_purge_prefix( 'example.com/page/' ) );
+assert( 'example.com/page/' === mcp_cloudflare_html_file_url_to_prefix( 'https://example.com/page/', array() ) );
+assert( 'example.com/page/' === mcp_cloudflare_html_file_url_to_prefix( 'https://example.com/page', array() ) );
+assert( '' === mcp_cloudflare_html_file_url_to_prefix( 'https://example.com/wp-content/app.css', array() ) );
+assert( '' === mcp_cloudflare_html_file_url_to_prefix( 'https://example.com/page/?preview=1', array() ) );
 
 $get_zone = $registered_abilities['cloudflare/get-zone']['execute_callback'];
 $zone     = $get_zone( new stdClass() );
@@ -312,6 +316,37 @@ $prefix_body     = json_decode( (string) $prefix_request['args']['body'], true, 
 assert( true === $prefix_result['success'] );
 assert( 'prefixes' === $prefix_result['purge']['type'] );
 assert( array( 'prefixes' => array( 'example.com/page/' ) ) === $prefix_body );
+
+$remote_requests = array();
+$auto_prefix_result = $clear_cache(
+	array(
+		'purge_everything' => false,
+		'files'            => array( 'https://example.com/page/' ),
+	)
+);
+$auto_prefix_request = end( $remote_requests );
+$auto_prefix_body    = json_decode( (string) $auto_prefix_request['args']['body'], true, 512, JSON_THROW_ON_ERROR );
+assert( true === $auto_prefix_result['success'] );
+assert( 'prefixes' === $auto_prefix_result['purge']['type'] );
+assert( array( 'prefixes' => array( 'example.com/page/' ) ) === $auto_prefix_body );
+assert( 'example.com/page/' === $auto_prefix_result['purge']['auto_prefixes']['https://example.com/page/'] );
+
+$remote_requests = array();
+$mixed_result    = $clear_cache(
+	array(
+		'purge_everything' => false,
+		'files'            => array(
+			'https://example.com/wp-content/app.css',
+			'https://example.com/page/',
+		),
+	)
+);
+$mixed_first_body  = json_decode( (string) $remote_requests[0]['args']['body'], true, 512, JSON_THROW_ON_ERROR );
+$mixed_second_body = json_decode( (string) $remote_requests[1]['args']['body'], true, 512, JSON_THROW_ON_ERROR );
+assert( true === $mixed_result['success'] );
+assert( 'multi' === $mixed_result['purge']['type'] );
+assert( array( 'files' => array( 'https://example.com/wp-content/app.css' ) ) === $mixed_first_body );
+assert( array( 'prefixes' => array( 'example.com/page/' ) ) === $mixed_second_body );
 
 $remote_requests = array();
 $options['cloudflare_api_key']   = 'cfut_' . str_repeat( 'A', 40 );

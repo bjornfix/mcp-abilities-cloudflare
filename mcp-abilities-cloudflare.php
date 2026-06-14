@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Cloudflare
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-cloudflare
  * Description: Cloudflare abilities for MCP. Inspect and clear Cloudflare cache for WordPress sites.
- * Version: 1.0.12
+ * Version: 1.0.13
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -446,6 +446,45 @@ function mcp_cloudflare_normalize_purge_prefix( $value ): string {
 }
 
 /**
+ * Convert a public HTML file purge URL to Cloudflare's prefix format.
+ *
+ * The Devenia public HTML cache rule caches extensionless/html paths at the
+ * edge. Exact URL purge can report success while leaving those HTML objects
+ * in cache, so extensionless/html page URLs are better purged by prefix.
+ *
+ * @param string $url     Public URL from the `files` input.
+ * @param array  $context Cloudflare context.
+ * @return string Prefix in `host/path` format, or empty string when the URL should remain an exact file purge.
+ */
+function mcp_cloudflare_html_file_url_to_prefix( string $url, array $context ): string {
+	$parts = wp_parse_url( $url );
+	if ( ! is_array( $parts ) || empty( $parts['host'] ) ) {
+		return '';
+	}
+
+	if ( ! empty( $parts['query'] ) ) {
+		return '';
+	}
+
+	$host = strtolower( (string) $parts['host'] );
+	$path = isset( $parts['path'] ) ? (string) $parts['path'] : '/';
+	if ( '' === $path || '/' === $path ) {
+		return '';
+	}
+
+	$extension = strtolower( pathinfo( $path, PATHINFO_EXTENSION ) );
+	if ( '' !== $extension && 'html' !== $extension ) {
+		return '';
+	}
+
+	if ( '' === $extension && ! str_ends_with( $path, '/' ) ) {
+		$path .= '/';
+	}
+
+	return mcp_cloudflare_normalize_purge_prefix( $host . $path );
+}
+
+/**
  * Fetch a single Cloudflare zone setting.
  *
  * @param array  $context Cloudflare context.
@@ -709,78 +748,141 @@ function mcp_register_cloudflare_abilities(): void {
 					$prefixes = array_slice( $prefixes, 0, 100 );
 					$hosts = array_slice( $hosts, 0, 100 );
 
-				if ( ! empty( $files ) ) {
-					$purge_data = array( 'files' => $files );
-					$purge_type = 'files';
-				} elseif ( ! empty( $tags ) ) {
-					$purge_data = array( 'tags' => $tags );
-					$purge_type = 'tags';
-				} elseif ( ! empty( $prefixes ) ) {
-					$purge_data = array( 'prefixes' => $prefixes );
-					$purge_type = 'prefixes';
-				} elseif ( ! empty( $hosts ) ) {
-					$purge_data = array( 'hosts' => $hosts );
-					$purge_type = 'hosts';
-				} else {
-					$purge_data = array( 'purge_everything' => $purge_everything );
-					$purge_type = 'everything';
+				$exact_files      = array();
+				$auto_prefixes    = array();
+				$auto_prefix_from = array();
+				foreach ( $files as $file_url ) {
+					$prefix = mcp_cloudflare_html_file_url_to_prefix( $file_url, $context );
+					if ( '' !== $prefix ) {
+						$auto_prefixes[]               = $prefix;
+						$auto_prefix_from[ $file_url ] = $prefix;
+						continue;
+					}
+
+					$exact_files[] = $file_url;
 				}
 
-				$purge_result = mcp_cloudflare_api_request(
-					'POST',
-					'https://api.cloudflare.com/client/v4/zones/' . $context['zone_id'] . '/purge_cache',
-					$context,
-					array(
-						'body'    => wp_json_encode( $purge_data ),
-						'timeout' => 30,
-					)
-				);
+				$prefixes = array_values( array_unique( array_merge( $prefixes, $auto_prefixes ) ) );
+				$purge_operations = array();
 
-				if ( is_wp_error( $purge_result ) ) {
-					return array(
-						'success' => false,
-						'message' => 'Failed to purge cache: ' . $purge_result->get_error_message(),
+				if ( ! empty( $exact_files ) ) {
+					$purge_operations[] = array(
+						'type'  => 'files',
+						'data'  => array( 'files' => $exact_files ),
+						'count' => count( $exact_files ),
+					);
+				}
+				if ( ! empty( $tags ) ) {
+					$purge_operations[] = array(
+						'type'  => 'tags',
+						'data'  => array( 'tags' => $tags ),
+						'count' => count( $tags ),
+					);
+				}
+				if ( ! empty( $prefixes ) ) {
+					$purge_operations[] = array(
+						'type'  => 'prefixes',
+						'data'  => array( 'prefixes' => $prefixes ),
+						'count' => count( $prefixes ),
+					);
+				}
+				if ( ! empty( $hosts ) ) {
+					$purge_operations[] = array(
+						'type'  => 'hosts',
+						'data'  => array( 'hosts' => $hosts ),
+						'count' => count( $hosts ),
+					);
+				}
+				if ( empty( $purge_operations ) ) {
+					$purge_operations[] = array(
+						'type'  => 'everything',
+						'data'  => array( 'purge_everything' => $purge_everything ),
+						'count' => 1,
 					);
 				}
 
-				$purge_body = $purge_result['body'];
+				$operation_results = array();
+				foreach ( $purge_operations as $operation ) {
+					$purge_result = mcp_cloudflare_api_request(
+						'POST',
+						'https://api.cloudflare.com/client/v4/zones/' . $context['zone_id'] . '/purge_cache',
+						$context,
+						array(
+							'body'    => wp_json_encode( $operation['data'] ),
+							'timeout' => 30,
+						)
+					);
 
-				if ( empty( $purge_body['success'] ) ) {
-					$error_msg = mcp_cloudflare_api_error_message( $purge_body );
-					return array(
-						'success' => false,
-						'message' => 'Cache purge failed: ' . $error_msg,
+					if ( is_wp_error( $purge_result ) ) {
+						return array(
+							'success' => false,
+							'message' => 'Failed to purge cache: ' . $purge_result->get_error_message(),
+							'purge'   => array(
+								'completed' => $operation_results,
+							),
+						);
+					}
+
+					$purge_body = $purge_result['body'];
+
+					if ( empty( $purge_body['success'] ) ) {
+						$error_msg = mcp_cloudflare_api_error_message( $purge_body );
+						return array(
+							'success' => false,
+							'message' => 'Cache purge failed: ' . $error_msg,
+							'purge'   => array(
+								'failed_type' => $operation['type'],
+								'completed'   => $operation_results,
+							),
+						);
+					}
+
+					$operation_results[] = array(
+						'type'          => $operation['type'],
+						'count'         => $operation['count'],
+						'payload_keys'  => array_keys( $operation['data'] ),
+						'cloudflare_id' => (string) ( $purge_body['result']['id'] ?? '' ),
+						'auth_mode'     => (string) ( $purge_result['auth_mode'] ?? '' ),
 					);
 				}
 
-				$domain  = $context['domain'] ?? '';
-				switch ( $purge_type ) {
-					case 'files':
-						$message = 'Purged ' . count( $files ) . ' specific URL(s) from Cloudflare cache.';
-						break;
-					case 'tags':
-						$message = 'Purged ' . count( $tags ) . ' cache tag(s) from Cloudflare cache.';
-						break;
-					case 'prefixes':
-						$message = 'Purged ' . count( $prefixes ) . ' URL prefix(es) from Cloudflare cache.';
-						break;
-					case 'hosts':
-						$message = 'Purged ' . count( $hosts ) . ' host(s) from Cloudflare cache.';
-						break;
-					default:
-						$message = 'Purged entire Cloudflare cache for ' . $domain . '.';
-						break;
+				$domain = $context['domain'] ?? '';
+				$counts = array_fill_keys( array( 'files', 'tags', 'prefixes', 'hosts', 'everything' ), 0 );
+				foreach ( $purge_operations as $operation ) {
+					$counts[ $operation['type'] ] += (int) $operation['count'];
 				}
+				$message_parts = array();
+				if ( $counts['files'] > 0 ) {
+					$message_parts[] = $counts['files'] . ' exact URL(s)';
+				}
+				if ( $counts['tags'] > 0 ) {
+					$message_parts[] = $counts['tags'] . ' cache tag(s)';
+				}
+				if ( $counts['prefixes'] > 0 ) {
+					$message_parts[] = $counts['prefixes'] . ' URL prefix(es)';
+				}
+				if ( $counts['hosts'] > 0 ) {
+					$message_parts[] = $counts['hosts'] . ' host(s)';
+				}
+				$message = $counts['everything'] > 0
+					? 'Purged entire Cloudflare cache for ' . $domain . '.'
+					: 'Purged ' . implode( ', ', $message_parts ) . ' from Cloudflare cache.';
+				$purge_type = count( $operation_results ) > 1 ? 'multi' : ( $operation_results[0]['type'] ?? 'unknown' );
+				$total_count = array_sum( $counts );
 
 				return array(
 					'success' => true,
 					'message' => $message,
 					'purge'   => array(
 						'type'          => $purge_type,
-						'count'         => 'everything' === $purge_type ? 1 : count( reset( $purge_data ) ),
-						'payload_keys'  => array_keys( $purge_data ),
-						'cloudflare_id' => (string) ( $purge_body['result']['id'] ?? '' ),
-						'auth_mode'     => (string) ( $purge_result['auth_mode'] ?? '' ),
+						'count'         => $total_count,
+						'payload_keys'  => array_values( array_unique( array_merge( ...array_map( static function ( $operation ) {
+							return array_keys( $operation['data'] );
+						}, $purge_operations ) ) ) ),
+						'cloudflare_id' => $operation_results[0]['cloudflare_id'] ?? '',
+						'auth_mode'     => $operation_results[0]['auth_mode'] ?? '',
+						'operations'    => $operation_results,
+						'auto_prefixes' => $auto_prefix_from,
 					),
 				);
 			},

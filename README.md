@@ -8,7 +8,7 @@ Cloudflare abilities for MCP. Inspect and clear Cloudflare cache for WordPress s
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
 
 **Tested up to:** 7.0
-**Stable tag:** 1.0.12
+**Stable tag:** 1.0.13
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -165,6 +165,10 @@ Use this when Cloudflare accepts an exact URL purge but the final HTML object re
 ```
 
 ## Changelog
+
+### 1.0.13
+- Changed `cloudflare/clear-cache` so extensionless/html URLs passed in `files` are automatically purged as Cloudflare prefixes.
+- Exact file purges are still used for asset URLs, and mixed HTML/assets input is split into the correct purge operations.
 
 ### 1.0.12
 - Fixed prefix purge normalization so callers can pass either full URLs or Cloudflare `host/path` prefixes.
