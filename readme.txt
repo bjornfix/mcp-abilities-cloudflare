@@ -3,7 +3,7 @@ Contributors: devenia
 Tags: mcp, cloudflare, cache, ai, automation
 Requires at least: 6.9
 Tested up to: 7.0
-Stable tag: 1.0.11
+Stable tag: 1.0.12
 Requires PHP: 8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -24,6 +24,9 @@ Part of the MCP Expose Abilities ecosystem.
 4. Activate the plugin
 
 == Changelog ==
+
+= 1.0.12 =
+* Fixed: prefix purges now normalize full URLs and scheme-less prefixes into Cloudflare's required `host/path` format.
 
 = 1.0.11 =
 * Added: `cloudflare/clear-cache` now supports URL prefix purges for cached HTML cases where exact URL purges do not evict the edge object.

@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Cloudflare
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-cloudflare
  * Description: Cloudflare abilities for MCP. Inspect and clear Cloudflare cache for WordPress sites.
- * Version: 1.0.11
+ * Version: 1.0.12
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -424,6 +424,28 @@ function mcp_cloudflare_header_value( $value ): string {
 }
 
 /**
+ * Normalize a Cloudflare purge prefix.
+ *
+ * Cloudflare's purge_cache `prefixes` values use `host/path` without a URI
+ * scheme. Do not pass these through esc_url_raw(); WordPress will prepend
+ * `http://` to scheme-less host/path values, and Cloudflare rejects that.
+ *
+ * @param mixed $value Raw prefix.
+ * @return string
+ */
+function mcp_cloudflare_normalize_purge_prefix( $value ): string {
+	if ( ! is_string( $value ) ) {
+		return '';
+	}
+
+	$prefix = trim( sanitize_text_field( $value ) );
+	$prefix = preg_replace( '#^[a-z][a-z0-9+.-]*://#i', '', $prefix );
+	$prefix = ltrim( (string) $prefix, '/' );
+
+	return $prefix;
+}
+
+/**
  * Fetch a single Cloudflare zone setting.
  *
  * @param array  $context Cloudflare context.
@@ -663,7 +685,7 @@ function mcp_register_cloudflare_abilities(): void {
 							array_filter(
 								array_map(
 									static function ( $item ) {
-										return is_string( $item ) ? esc_url_raw( $item ) : '';
+										return mcp_cloudflare_normalize_purge_prefix( $item );
 									},
 									$input['prefixes']
 								)

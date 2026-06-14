@@ -8,7 +8,7 @@ Cloudflare abilities for MCP. Inspect and clear Cloudflare cache for WordPress s
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
 
 **Tested up to:** 7.0
-**Stable tag:** 1.0.11
+**Stable tag:** 1.0.12
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -165,6 +165,9 @@ Use this when Cloudflare accepts an exact URL purge but the final HTML object re
 ```
 
 ## Changelog
+
+### 1.0.12
+- Fixed prefix purge normalization so callers can pass either full URLs or Cloudflare `host/path` prefixes.
 
 ### 1.0.11
 - Added URL prefix purge support for cases where exact URL purge reports success but cached HTML variants remain HIT.
