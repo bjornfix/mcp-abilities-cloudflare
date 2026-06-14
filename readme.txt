@@ -3,7 +3,7 @@ Contributors: devenia
 Tags: mcp, cloudflare, cache, ai, automation
 Requires at least: 6.9
 Tested up to: 7.0
-Stable tag: 1.0.10
+Stable tag: 1.0.11
 Requires PHP: 8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -24,6 +24,10 @@ Part of the MCP Expose Abilities ecosystem.
 4. Activate the plugin
 
 == Changelog ==
+
+= 1.0.11 =
+* Added: `cloudflare/clear-cache` now supports URL prefix purges for cached HTML cases where exact URL purges do not evict the edge object.
+* Added: `cloudflare/clear-cache` responses now include structured purge metadata with purge type, payload keys, Cloudflare purge ID, and auth mode.
 
 = 1.0.10 =
 * Added: `cloudflare/ensure-wordpress-html-cache-rule` with dry-run by default.

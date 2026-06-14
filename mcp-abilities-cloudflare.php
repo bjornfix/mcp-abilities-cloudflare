@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Cloudflare
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-cloudflare
  * Description: Cloudflare abilities for MCP. Inspect and clear Cloudflare cache for WordPress sites.
- * Version: 1.0.10
+ * Version: 1.0.11
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -600,6 +600,11 @@ function mcp_register_cloudflare_abilities(): void {
 						'items'       => array( 'type' => 'string' ),
 						'description' => 'Optional: Cache tags to purge (Enterprise plans only).',
 					),
+					'prefixes'         => array(
+						'type'        => 'array',
+						'items'       => array( 'type' => 'string' ),
+						'description' => 'Optional: URL prefixes to purge when exact URL purges do not match cached HTML variants.',
+					),
 					'hosts'            => array(
 						'type'        => 'array',
 						'items'       => array( 'type' => 'string' ),
@@ -613,6 +618,7 @@ function mcp_register_cloudflare_abilities(): void {
 				'properties' => array(
 					'success' => array( 'type' => 'boolean' ),
 					'message' => array( 'type' => 'string' ),
+					'purge'   => array( 'type' => 'object' ),
 				),
 			),
 			'execute_callback'    => function ( $input = array() ): array {
@@ -652,6 +658,18 @@ function mcp_register_cloudflare_abilities(): void {
 							)
 						)
 						: array();
+					$prefixes = isset( $input['prefixes'] ) && is_array( $input['prefixes'] )
+						? array_values(
+							array_filter(
+								array_map(
+									static function ( $item ) {
+										return is_string( $item ) ? esc_url_raw( $item ) : '';
+									},
+									$input['prefixes']
+								)
+							)
+						)
+						: array();
 					$hosts = isset( $input['hosts'] ) && is_array( $input['hosts'] )
 						? array_values(
 							array_filter(
@@ -666,16 +684,24 @@ function mcp_register_cloudflare_abilities(): void {
 						: array();
 					$files = array_slice( $files, 0, 100 );
 					$tags  = array_slice( $tags, 0, 100 );
+					$prefixes = array_slice( $prefixes, 0, 100 );
 					$hosts = array_slice( $hosts, 0, 100 );
 
 				if ( ! empty( $files ) ) {
 					$purge_data = array( 'files' => $files );
+					$purge_type = 'files';
 				} elseif ( ! empty( $tags ) ) {
 					$purge_data = array( 'tags' => $tags );
+					$purge_type = 'tags';
+				} elseif ( ! empty( $prefixes ) ) {
+					$purge_data = array( 'prefixes' => $prefixes );
+					$purge_type = 'prefixes';
 				} elseif ( ! empty( $hosts ) ) {
 					$purge_data = array( 'hosts' => $hosts );
+					$purge_type = 'hosts';
 				} else {
 					$purge_data = array( 'purge_everything' => $purge_everything );
+					$purge_type = 'everything';
 				}
 
 				$purge_result = mcp_cloudflare_api_request(
@@ -706,13 +732,34 @@ function mcp_register_cloudflare_abilities(): void {
 				}
 
 				$domain  = $context['domain'] ?? '';
-				$message = ! empty( $files )
-					? 'Purged ' . count( $files ) . ' specific URL(s) from Cloudflare cache.'
-					: 'Purged entire Cloudflare cache for ' . $domain . '.';
+				switch ( $purge_type ) {
+					case 'files':
+						$message = 'Purged ' . count( $files ) . ' specific URL(s) from Cloudflare cache.';
+						break;
+					case 'tags':
+						$message = 'Purged ' . count( $tags ) . ' cache tag(s) from Cloudflare cache.';
+						break;
+					case 'prefixes':
+						$message = 'Purged ' . count( $prefixes ) . ' URL prefix(es) from Cloudflare cache.';
+						break;
+					case 'hosts':
+						$message = 'Purged ' . count( $hosts ) . ' host(s) from Cloudflare cache.';
+						break;
+					default:
+						$message = 'Purged entire Cloudflare cache for ' . $domain . '.';
+						break;
+				}
 
 				return array(
 					'success' => true,
 					'message' => $message,
+					'purge'   => array(
+						'type'          => $purge_type,
+						'count'         => 'everything' === $purge_type ? 1 : count( reset( $purge_data ) ),
+						'payload_keys'  => array_keys( $purge_data ),
+						'cloudflare_id' => (string) ( $purge_body['result']['id'] ?? '' ),
+						'auth_mode'     => (string) ( $purge_result['auth_mode'] ?? '' ),
+					),
 				);
 			},
 			'permission_callback' => 'mcp_cloudflare_permission_callback',

@@ -8,7 +8,7 @@ Cloudflare abilities for MCP. Inspect and clear Cloudflare cache for WordPress s
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
 
 **Tested up to:** 7.0
-**Stable tag:** 1.0.10
+**Stable tag:** 1.0.11
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -148,7 +148,27 @@ If you skip base-stack verification and start with add-ons immediately, troubles
 }
 ```
 
+### Clear a URL prefix
+
+Use this when Cloudflare accepts an exact URL purge but the final HTML object remains cached.
+
+```json
+{
+  "ability_name": "cloudflare/clear-cache",
+  "parameters": {
+    "purge_everything": false,
+    "prefixes": [
+      "https://example.com/page/"
+    ]
+  }
+}
+```
+
 ## Changelog
+
+### 1.0.11
+- Added URL prefix purge support for cases where exact URL purge reports success but cached HTML variants remain HIT.
+- Added structured purge metadata to `cloudflare/clear-cache` responses, including purge type, payload keys, Cloudflare purge ID, and auth mode.
 
 ### 1.0.10
 - Added `cloudflare/ensure-wordpress-html-cache-rule` with dry-run by default.

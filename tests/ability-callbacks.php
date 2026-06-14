@@ -295,6 +295,21 @@ $clear_input->purge_everything = true;
 $clear_cache                   = $registered_abilities['cloudflare/clear-cache']['execute_callback'];
 $clear_result                  = $clear_cache( $clear_input );
 assert( true === $clear_result['success'] );
+assert( 'everything' === $clear_result['purge']['type'] );
+assert( 'purge-123' === $clear_result['purge']['cloudflare_id'] );
+
+$remote_requests = array();
+$prefix_result   = $clear_cache(
+	array(
+		'purge_everything' => false,
+		'prefixes'         => array( 'https://example.com/page/' ),
+	)
+);
+$prefix_request  = end( $remote_requests );
+$prefix_body     = json_decode( (string) $prefix_request['args']['body'], true, 512, JSON_THROW_ON_ERROR );
+assert( true === $prefix_result['success'] );
+assert( 'prefixes' === $prefix_result['purge']['type'] );
+assert( array( 'prefixes' => array( 'https://example.com/page/' ) ) === $prefix_body );
 
 $remote_requests = array();
 $options['cloudflare_api_key']   = 'cfut_' . str_repeat( 'A', 40 );
