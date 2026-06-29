@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Cloudflare
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-cloudflare
  * Description: Cloudflare abilities for MCP. Inspect and clear Cloudflare cache for WordPress sites.
- * Version: 1.0.13
+ * Version: 1.0.14
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -522,6 +522,54 @@ function mcp_cloudflare_get_zone_setting( array $context, string $setting ): arr
 	);
 }
 
+function mcp_cloudflare_normalize_cache_exclude_paths( array $paths ): array {
+	$normalized = array();
+	foreach ( $paths as $path ) {
+		if ( ! is_string( $path ) ) {
+			continue;
+		}
+
+		$parsed = wp_parse_url( $path );
+		if ( is_array( $parsed ) && ! empty( $parsed['path'] ) ) {
+			$path = (string) $parsed['path'];
+		}
+
+		$path = '/' . trim( sanitize_text_field( $path ), '/' );
+		if ( '/' === $path ) {
+			continue;
+		}
+
+		$normalized[] = $path . '/';
+	}
+
+	return array_values( array_unique( $normalized ) );
+}
+
+function mcp_cloudflare_extract_custom_cache_exclude_paths( string $expression ): array {
+	if ( '' === $expression ) {
+		return array();
+	}
+
+	$base_exclusions = array(
+		'/wp-login.php',
+		'/xmlrpc.php',
+		'/wp-cron.php',
+		'/feed',
+	);
+	preg_match_all( '/http\\.request\\.uri\\.path ne "([^"]+)"/', $expression, $matches );
+	$paths = isset( $matches[1] ) && is_array( $matches[1] ) ? $matches[1] : array();
+	$paths = array_values(
+		array_filter(
+			$paths,
+			static function ( string $path ) use ( $base_exclusions ): bool {
+				return ! in_array( $path, $base_exclusions, true );
+			}
+		)
+	);
+
+	return mcp_cloudflare_normalize_cache_exclude_paths( $paths );
+}
+
 /**
  * Build the default public WordPress HTML cache rule.
  *
@@ -530,10 +578,12 @@ function mcp_cloudflare_get_zone_setting( array $context, string $setting ): arr
  * @param bool   $enabled          Whether the rule should be enabled.
  * @param string $description      Rule description.
  * @param string $ref              Stable rule reference.
+ * @param array  $exclude_paths    Public paths excluded from anonymous HTML cache.
  * @return array
  */
-function mcp_cloudflare_build_wordpress_html_cache_rule( string $host, int $edge_ttl_seconds, bool $enabled, string $description, string $ref ): array {
+function mcp_cloudflare_build_wordpress_html_cache_rule( string $host, int $edge_ttl_seconds, bool $enabled, string $description, string $ref, array $exclude_paths = array() ): array {
 	$edge_ttl_seconds = max( 60, min( 86400, $edge_ttl_seconds ) );
+	$exclude_paths    = mcp_cloudflare_normalize_cache_exclude_paths( $exclude_paths );
 	$expression_parts = array(
 		'(http.host eq "' . addcslashes( $host, "\\\"" ) . '")',
 		'((http.request.method eq "GET") or (http.request.method eq "HEAD"))',
@@ -553,6 +603,9 @@ function mcp_cloudflare_build_wordpress_html_cache_rule( string $host, int $edge
 		'(not http.cookie contains "woocommerce_")',
 		'(not http.cookie contains "wp_woocommerce_session_")',
 	);
+	foreach ( $exclude_paths as $path ) {
+		$expression_parts[] = '(http.request.uri.path ne "' . addcslashes( $path, "\\\"" ) . '")';
+	}
 
 	return array(
 		'ref'               => $ref,
@@ -1400,6 +1453,11 @@ function mcp_register_cloudflare_abilities(): void {
 						'type'        => 'string',
 						'description' => 'Stable Cloudflare rule reference used for idempotent updates.',
 					),
+					'exclude_paths'    => array(
+						'type'        => 'array',
+						'items'       => array( 'type' => 'string' ),
+						'description' => 'Optional public path prefixes to exclude from the anonymous HTML cache rule, such as /vi/example/. Existing custom excludes are preserved when omitted.',
+					),
 				),
 				'additionalProperties' => false,
 			),
@@ -1447,6 +1505,9 @@ function mcp_register_cloudflare_abilities(): void {
 				$ref              = isset( $input['ref'] ) && is_string( $input['ref'] )
 					? sanitize_key( $input['ref'] )
 					: 'devenia-public-wordpress-html-cache';
+				$exclude_paths    = isset( $input['exclude_paths'] ) && is_array( $input['exclude_paths'] )
+					? mcp_cloudflare_normalize_cache_exclude_paths( $input['exclude_paths'] )
+					: array();
 
 				$ruleset = mcp_cloudflare_get_cache_entrypoint_ruleset( $context );
 				if ( is_wp_error( $ruleset ) ) {
@@ -1457,7 +1518,7 @@ function mcp_register_cloudflare_abilities(): void {
 				}
 
 				$existing_rules = isset( $ruleset['rules'] ) && is_array( $ruleset['rules'] ) ? $ruleset['rules'] : array();
-				$new_rule       = mcp_cloudflare_build_wordpress_html_cache_rule( $host, $edge_ttl_seconds, $enabled, $description, $ref );
+				$new_rule       = mcp_cloudflare_build_wordpress_html_cache_rule( $host, $edge_ttl_seconds, $enabled, $description, $ref, $exclude_paths );
 				$rules          = array();
 				$existing_rule  = null;
 				$action         = 'created';
@@ -1473,6 +1534,13 @@ function mcp_register_cloudflare_abilities(): void {
 						$existing_rule = $rule;
 						if ( isset( $rule['id'] ) ) {
 							$new_rule['id'] = $rule['id'];
+						}
+						if ( ! isset( $input['exclude_paths'] ) && isset( $rule['expression'] ) && is_string( $rule['expression'] ) ) {
+							$preserved_paths = mcp_cloudflare_extract_custom_cache_exclude_paths( $rule['expression'] );
+							if ( ! empty( $preserved_paths ) ) {
+								$new_rule       = mcp_cloudflare_build_wordpress_html_cache_rule( $host, $edge_ttl_seconds, $enabled, $description, $ref, $preserved_paths );
+								$new_rule['id'] = $rule['id'];
+							}
 						}
 						$rules[] = $new_rule;
 						$action  = 'updated';
