@@ -1,9 +1,9 @@
 === MCP Abilities - Cloudflare ===
-Contributors: devenia
+Contributors: basicus
 Tags: mcp, cloudflare, cache, ai, automation
 Requires at least: 6.9
 Tested up to: 7.0
-Stable tag: 1.0.14
+Stable tag: 1.0.15
 Requires PHP: 8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -24,6 +24,10 @@ Part of the MCP Expose Abilities ecosystem.
 4. Activate the plugin
 
 == Changelog ==
+
+= 1.0.15 =
+* Removed organization-specific runtime identity from cache probes and managed WordPress HTML cache rules.
+* Existing equivalent rules are now recognized by policy behavior rather than a branded label or reference.
 
 = 1.0.14 =
 * Added: `cloudflare/ensure-wordpress-html-cache-rule` now supports `exclude_paths` for proven cache-rule bypass cases and preserves existing custom excludes on later updates.

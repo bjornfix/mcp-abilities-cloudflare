@@ -3,9 +3,9 @@
  * Plugin Name: MCP Abilities - Cloudflare
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-cloudflare
  * Description: Cloudflare abilities for MCP. Inspect and clear Cloudflare cache for WordPress sites.
- * Version: 1.0.14
- * Author: Devenia
- * Author URI: https://devenia.com
+ * Version: 1.0.15
+ * Author: basicus
+ * Author URI: https://profiles.wordpress.org/basicus/
  * License: GPL-2.0+
  * License URI: http://www.gnu.org/licenses/gpl-2.0.txt
  * Requires at least: 6.9
@@ -448,7 +448,7 @@ function mcp_cloudflare_normalize_purge_prefix( $value ): string {
 /**
  * Convert a public HTML file purge URL to Cloudflare's prefix format.
  *
- * The Devenia public HTML cache rule caches extensionless/html paths at the
+ * The managed public HTML cache rule caches extensionless/html paths at the
  * edge. Exact URL purge can report success while leaving those HTML objects
  * in cache, so extensionless/html page URLs are better purged by prefix.
  *
@@ -482,6 +482,27 @@ function mcp_cloudflare_html_file_url_to_prefix( string $url, array $context ): 
 	}
 
 	return mcp_cloudflare_normalize_purge_prefix( $host . $path );
+}
+
+/**
+ * Whether a Cloudflare rule already implements this WordPress HTML policy.
+ *
+ * Match the behavior instead of a vendor- or site-branded display label. This
+ * lets older equivalent rules migrate to the generic identity without keeping
+ * customer names in the reusable Module.
+ *
+ * @param array<string,mixed> $rule Cloudflare rule.
+ * @param string              $host WordPress hostname.
+ */
+function mcp_cloudflare_is_wordpress_html_cache_policy_rule( array $rule, string $host ): bool {
+	if ( 'set_cache_settings' !== (string) ( $rule['action'] ?? '' ) ) {
+		return false;
+	}
+
+	$expression = (string) ( $rule['expression'] ?? '' );
+	return str_contains( $expression, 'http.host eq "' . $host . '"' )
+		&& str_contains( $expression, 'wordpress_logged_in_' )
+		&& str_contains( $expression, '/wp-admin' );
 }
 
 /**
@@ -1347,7 +1368,7 @@ function mcp_register_cloudflare_abilities(): void {
 								'timeout'     => 30,
 								'redirection' => 5,
 								'headers'     => array(
-									'User-Agent' => 'Devenia MCP Cloudflare Cache Probe/1.0',
+									'User-Agent' => 'MCP Abilities Cloudflare Cache Probe/1.0; ' . home_url( '/' ),
 									'Accept'     => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
 								),
 							)
@@ -1501,10 +1522,10 @@ function mcp_register_cloudflare_abilities(): void {
 				$dry_run          = ! array_key_exists( 'dry_run', $input ) || (bool) $input['dry_run'];
 				$description      = isset( $input['description'] ) && is_string( $input['description'] )
 					? sanitize_text_field( $input['description'] )
-					: 'Devenia public WordPress HTML cache';
+					: 'WordPress public HTML cache';
 				$ref              = isset( $input['ref'] ) && is_string( $input['ref'] )
 					? sanitize_key( $input['ref'] )
-					: 'devenia-public-wordpress-html-cache';
+					: 'mcp-wordpress-public-html-cache';
 				$exclude_paths    = isset( $input['exclude_paths'] ) && is_array( $input['exclude_paths'] )
 					? mcp_cloudflare_normalize_cache_exclude_paths( $input['exclude_paths'] )
 					: array();
@@ -1530,7 +1551,8 @@ function mcp_register_cloudflare_abilities(): void {
 
 					$matches_ref         = isset( $rule['ref'] ) && $ref === (string) $rule['ref'];
 					$matches_description = isset( $rule['description'] ) && $description === (string) $rule['description'];
-					if ( $matches_ref || $matches_description ) {
+					$matches_policy      = mcp_cloudflare_is_wordpress_html_cache_policy_rule( $rule, $host );
+					if ( $matches_ref || $matches_description || $matches_policy ) {
 						$existing_rule = $rule;
 						if ( isset( $rule['id'] ) ) {
 							$new_rule['id'] = $rule['id'];

@@ -166,6 +166,10 @@ Use this when Cloudflare accepts an exact URL purge but the final HTML object re
 
 ## Changelog
 
+### 1.0.15
+- Removed organization-specific runtime identity from cache probes and managed WordPress HTML cache rules.
+- Existing equivalent rules are recognized by policy behavior rather than a branded label or reference.
+
 ### 1.0.13
 - Changed `cloudflare/clear-cache` so extensionless/html URLs passed in `files` are automatically purged as Cloudflare prefixes.
 - Exact file purges are still used for asset URLs, and mixed HTML/assets input is split into the correct purge operations.
@@ -230,7 +234,7 @@ GPL-2.0+
 
 ## Author
 
-[Devenia](https://devenia.com) - We've been doing SEO and web development since 1993.
+[basicus](https://profiles.wordpress.org/basicus/)
 
 ## Links
 

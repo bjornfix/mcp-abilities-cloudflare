@@ -286,7 +286,7 @@ $put_request = end( $remote_requests );
 assert( str_ends_with( $put_request['url'], '/rulesets/entrypoint-1' ) );
 $put_body = json_decode( (string) $put_request['args']['body'], true, 512, JSON_THROW_ON_ERROR );
 assert( 'existing-rule' === $put_body['rules'][0]['ref'] );
-assert( 'devenia-public-wordpress-html-cache' === $put_body['rules'][1]['ref'] );
+assert( 'mcp-wordpress-public-html-cache' === $put_body['rules'][1]['ref'] );
 assert( 7200 === $put_body['rules'][1]['action_parameters']['edge_ttl']['default'] );
 
 $set_input        = new stdClass();
