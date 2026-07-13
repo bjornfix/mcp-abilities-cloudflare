@@ -12,6 +12,8 @@ define( 'ABSPATH', __DIR__ . '/' );
 
 $registered_abilities = array();
 $remote_requests      = array();
+$registered_actions   = array();
+$registered_filters   = array();
 $options              = array(
 	'cloudflare_api_email'          => 'admin@example.com',
 	'cloudflare_api_key'            => str_repeat( 'a', 40 ),
@@ -37,7 +39,15 @@ function wp_register_ability( string $name, array $args ): void {
 	$registered_abilities[ $name ] = $args;
 }
 
-function add_action( $hook_name, $callback ): void {}
+function add_action( $hook_name, $callback, $priority = 10, $accepted_args = 1 ): void {
+	global $registered_actions;
+	$registered_actions[ $hook_name ][] = compact( 'callback', 'priority', 'accepted_args' );
+}
+
+function add_filter( $hook_name, $callback, $priority = 10, $accepted_args = 1 ): void {
+	global $registered_filters;
+	$registered_filters[ $hook_name ][] = compact( 'callback', 'priority', 'accepted_args' );
+}
 
 function current_user_can( $capability ): bool {
 	return true;
@@ -48,7 +58,7 @@ function get_option( string $name, $default = '' ) {
 	return array_key_exists( $name, $options ) ? $options[ $name ] : $default;
 }
 
-function update_option( string $name, $value ): void {
+function update_option( string $name, $value, $autoload = null ): void {
 	global $options;
 	$options[ $name ] = $value;
 }
@@ -57,7 +67,7 @@ function wp_parse_url( string $url, int $component = -1 ) {
 	return parse_url( $url, $component );
 }
 
-function home_url(): string {
+function home_url( string $path = '' ): string {
 	return 'https://example.com';
 }
 
@@ -203,6 +213,11 @@ function wp_remote_retrieve_response_code( array $response ): int {
 
 require dirname( __DIR__ ) . '/mcp-abilities-cloudflare.php';
 
+assert( 'mcp_cloudflare_frontend_cache_invalidation_result' === $registered_filters['devenia_workflow_frontend_cache_invalidation_result'][0]['callback'] );
+assert( 3 === $registered_filters['devenia_workflow_frontend_cache_invalidation_result'][0]['accepted_args'] );
+assert( 'mcp_cloudflare_observe_plugin_upgrade_complete' === $registered_actions['upgrader_process_complete'][0]['callback'] );
+assert( 2 === $registered_actions['upgrader_process_complete'][0]['accepted_args'] );
+
 mcp_register_cloudflare_abilities();
 
 assert( isset( $registered_abilities['cloudflare/get-zone'] ) );
@@ -213,6 +228,7 @@ assert( isset( $registered_abilities['cloudflare/test-url-cache-status'] ) );
 assert( isset( $registered_abilities['cloudflare/ensure-wordpress-html-cache-rule'] ) );
 assert( isset( $registered_abilities['cloudflare/set-development-mode'] ) );
 assert( isset( $registered_abilities['cloudflare/clear-cache'] ) );
+assert( 'mcp_cloudflare_clear_cache_callback' === $registered_abilities['cloudflare/clear-cache']['execute_callback'] );
 
 foreach ( array( 'cloudflare/get-zone', 'cloudflare/get-development-mode' ) as $ability_name ) {
 	$schema = $registered_abilities[ $ability_name ]['input_schema'];
@@ -303,6 +319,7 @@ $clear_result                  = $clear_cache( $clear_input );
 assert( true === $clear_result['success'] );
 assert( 'everything' === $clear_result['purge']['type'] );
 assert( 'purge-123' === $clear_result['purge']['cloudflare_id'] );
+assert( 'mcp_cloudflare_deep_purge' === $clear_result['purge']['implementation'] );
 
 $remote_requests = array();
 $prefix_result   = $clear_cache(
@@ -330,6 +347,45 @@ assert( true === $auto_prefix_result['success'] );
 assert( 'prefixes' === $auto_prefix_result['purge']['type'] );
 assert( array( 'prefixes' => array( 'example.com/page/' ) ) === $auto_prefix_body );
 assert( 'example.com/page/' === $auto_prefix_result['purge']['auto_prefixes']['https://example.com/page/'] );
+
+$remote_requests = array();
+$workflow_result = mcp_cloudflare_frontend_cache_invalidation_result(
+	null,
+	array( 'https://example.com/nb/innstikk/devenia-workflow/' ),
+	array( 'source' => 'translation-publication' )
+);
+$workflow_body   = json_decode( (string) $remote_requests[0]['args']['body'], true, 512, JSON_THROW_ON_ERROR );
+assert( true === $workflow_result['success'] );
+assert( 'mcp_cloudflare_deep_purge' === $workflow_result['purge']['implementation'] );
+assert( array( 'prefixes' => array( 'example.com/nb/innstikk/devenia-workflow/' ) ) === $workflow_body );
+
+$remote_requests = array();
+$bounded_urls    = array();
+for ( $index = 0; $index < 105; $index++ ) {
+	$bounded_urls[] = 'https://example.com/page-' . $index . '/';
+}
+$bounded_result = mcp_cloudflare_frontend_cache_invalidation_result( null, $bounded_urls, array() );
+$bounded_body   = json_decode( (string) $remote_requests[0]['args']['body'], true, 512, JSON_THROW_ON_ERROR );
+assert( true === $bounded_result['success'] );
+assert( 100 === count( $bounded_body['prefixes'] ) );
+
+$remote_requests = array();
+$invalid_result  = mcp_cloudflare_frontend_cache_invalidation_result( null, array( 'javascript:alert(1)', 'https://outside.invalid/page/' ), array() );
+assert( false === $invalid_result['success'] );
+assert( 'invalid_purge_targets' === $invalid_result['error']['code'] );
+assert( array() === $remote_requests );
+
+$remote_requests = array();
+mcp_cloudflare_observe_plugin_upgrade_complete( new stdClass(), array( 'type' => 'plugin', 'action' => 'update', 'plugins' => array( 'one/one.php', 'two/two.php' ) ) );
+$upgrade_body = json_decode( (string) $remote_requests[0]['args']['body'], true, 512, JSON_THROW_ON_ERROR );
+assert( 1 === count( $remote_requests ) );
+assert( array( 'prefixes' => array( 'example.com/' ) ) === $upgrade_body );
+assert( true === $options['mcp_cloudflare_last_plugin_upgrade_purge']['success'] );
+
+$request_count = count( $remote_requests );
+mcp_cloudflare_observe_plugin_upgrade_complete( new stdClass(), array( 'type' => 'theme', 'action' => 'update' ) );
+mcp_cloudflare_observe_plugin_upgrade_complete( new stdClass(), array( 'type' => 'plugin', 'action' => 'delete' ) );
+assert( $request_count === count( $remote_requests ) );
 
 $remote_requests = array();
 $mixed_result    = $clear_cache(
@@ -380,5 +436,18 @@ assert( is_array( $fallback_result ) );
 assert( 'token' === $fallback_result['auth_mode'] );
 assert( $options['cloudflare_api_key'] === ( $first_headers['X-Auth-Key'] ?? '' ) );
 assert( 'Bearer ' . $options['cloudflare_api_key'] === ( $second_headers['Authorization'] ?? '' ) );
+
+$options['cloudflare_api_email'] = '';
+$options['cloudflare_api_key']   = '';
+$options['cloudflare_api_token'] = '';
+$structured_error                = mcp_cloudflare_frontend_cache_invalidation_result( null, array( 'https://example.com/nb/' ), array() );
+assert( false === $structured_error['success'] );
+assert( 'cloudflare_context' === $structured_error['error']['code'] );
+assert( 'mcp_cloudflare_deep_purge' === $structured_error['purge']['implementation'] );
+
+mcp_cloudflare_observe_plugin_upgrade_complete( new stdClass(), array( 'type' => 'plugin', 'action' => 'install', 'plugin' => 'sample/sample.php' ) );
+assert( false === $options['mcp_cloudflare_last_plugin_upgrade_purge']['success'] );
+assert( 'cloudflare_context' === $options['mcp_cloudflare_last_plugin_upgrade_purge']['error'] );
+assert( strlen( $options['mcp_cloudflare_last_plugin_upgrade_purge']['message'] ) <= 500 );
 
 echo "ability callback regression passed\n";

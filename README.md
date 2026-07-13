@@ -8,7 +8,7 @@ Cloudflare abilities for MCP. Inspect and clear Cloudflare cache for WordPress s
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
 
 **Tested up to:** 7.0
-**Stable tag:** 1.0.13
+**Stable tag:** 1.0.16
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -165,6 +165,11 @@ Use this when Cloudflare accepts an exact URL purge but the final HTML object re
 ```
 
 ## Changelog
+
+### 1.0.16
+- Added one reusable, bounded deep-purge implementation shared by the MCP ability and cache-coherence hooks.
+- Added generic frontend URL invalidation through HTML prefix purges, including structured success and failure results.
+- Added a post-completion plugin install/update observer that purges the public HTML root prefix and records bounded status without interrupting the upgrader.
 
 ### 1.0.15
 - Removed organization-specific runtime identity from cache probes and managed WordPress HTML cache rules.

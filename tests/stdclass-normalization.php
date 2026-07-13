@@ -10,7 +10,8 @@ declare( strict_types=1 );
 
 define( 'ABSPATH', __DIR__ . '/' );
 
-function add_action( $hook_name, $callback ): void {}
+function add_action( $hook_name, $callback, $priority = 10, $accepted_args = 1 ): void {}
+function add_filter( $hook_name, $callback, $priority = 10, $accepted_args = 1 ): void {}
 
 require dirname( __DIR__ ) . '/mcp-abilities-cloudflare.php';
 
