@@ -359,6 +359,24 @@ assert( true === $workflow_result['success'] );
 assert( 'mcp_cloudflare_deep_purge' === $workflow_result['purge']['implementation'] );
 assert( array( 'prefixes' => array( 'example.com/nb/innstikk/devenia-workflow/' ) ) === $workflow_body );
 
+$valid_local_receipt = array(
+	'success' => true,
+	'adapter' => array( 'name' => 'cache-enabler' ),
+	'purge' => array( 'implementation' => 'mcp_cache_enabler_frontend_cache_invalidation_result', 'count' => 1, 'urls' => array( 'https://example.com/nb/' ) ),
+);
+$remote_requests = array();
+$composed_success = mcp_cloudflare_frontend_cache_invalidation_result( $valid_local_receipt, array( 'https://example.com/nb/' ), array() );
+assert( true === $composed_success['success'] );
+assert( $valid_local_receipt === $composed_success['local_cache'] );
+assert( 1 === count( $remote_requests ) );
+
+$local_failure_receipt = array( 'success' => false, 'error' => array( 'code' => 'local_cache_purge_failed' ) );
+$remote_requests = array();
+$composed_failure = mcp_cloudflare_frontend_cache_invalidation_result( $local_failure_receipt, array( 'https://example.com/nb/' ), array() );
+assert( false === $composed_failure['success'] );
+assert( 'local_cache_purge_failed' === $composed_failure['error']['code'] );
+assert( array() === $remote_requests );
+
 $remote_requests = array();
 $bounded_urls    = array();
 for ( $index = 0; $index < 105; $index++ ) {
@@ -444,6 +462,69 @@ $structured_error                = mcp_cloudflare_frontend_cache_invalidation_re
 assert( false === $structured_error['success'] );
 assert( 'cloudflare_context' === $structured_error['error']['code'] );
 assert( 'mcp_cloudflare_deep_purge' === $structured_error['purge']['implementation'] );
+
+$local_cache_receipt = array(
+	'success' => true,
+	'adapter' => array( 'name' => 'cache-enabler' ),
+	'purge' => array( 'implementation' => 'mcp_cache_enabler_frontend_cache_invalidation_result', 'count' => 1, 'urls' => array( 'https://example.com/nb/' ) ),
+);
+$optional_edge_result = mcp_cloudflare_frontend_cache_invalidation_result( $local_cache_receipt, array( 'https://example.com/nb/' ), array() );
+assert( true === $optional_edge_result['success'] );
+assert( 'cache-enabler' === $optional_edge_result['adapter']['name'] );
+assert( true === $optional_edge_result['edge_cache']['skipped'] );
+assert( 'cloudflare_not_configured' === $optional_edge_result['edge_cache']['reason'] );
+
+$no_local_cache_receipt = array(
+	'success' => true,
+	'adapter' => array( 'name' => 'cache-enabler' ),
+	'purge' => array( 'implementation' => 'mcp_cache_enabler_frontend_cache_invalidation_result', 'count' => 0, 'urls' => array( 'https://example.com/nb/' ) ),
+	'local_cache' => array( 'skipped' => true, 'reason' => 'no_local_page_cache_configured' ),
+);
+$no_local_edge_result = mcp_cloudflare_frontend_cache_invalidation_result( $no_local_cache_receipt, array( 'https://example.com/nb/' ), array() );
+assert( true === $no_local_edge_result['success'] );
+assert( true === $no_local_edge_result['edge_cache']['skipped'] );
+
+$duplicate_edge_result = mcp_cloudflare_frontend_cache_invalidation_result( $local_cache_receipt, array( 'https://example.com/nb/', 'https://example.com/nb/' ), array() );
+assert( true === $duplicate_edge_result['success'] );
+assert( true === $duplicate_edge_result['edge_cache']['skipped'] );
+
+$bounded_receipt_urls = array();
+for ( $index = 0; $index < 100; $index++ ) {
+	$bounded_receipt_urls[] = 'https://example.com/page-' . $index . '/';
+}
+$bounded_local_receipt = array(
+	'success' => true,
+	'adapter' => array( 'name' => 'cache-enabler' ),
+	'purge' => array( 'implementation' => 'mcp_cache_enabler_frontend_cache_invalidation_result', 'count' => 100, 'urls' => $bounded_receipt_urls ),
+);
+$over_limit_urls = array_merge( $bounded_receipt_urls, array( 'https://example.com/page-100/', 'https://example.com/page-101/' ) );
+$bounded_edge_result = mcp_cloudflare_frontend_cache_invalidation_result( $bounded_local_receipt, $over_limit_urls, array() );
+assert( true === $bounded_edge_result['success'] );
+assert( true === $bounded_edge_result['edge_cache']['skipped'] );
+
+$malformed_local_receipt = array(
+	'success' => true,
+	'adapter' => array( 'name' => 'cache-enabler' ),
+	'purge' => array( 'implementation' => 'mcp_cache_enabler_frontend_cache_invalidation_result' ),
+);
+$malformed_local_result = mcp_cloudflare_frontend_cache_invalidation_result( $malformed_local_receipt, array( 'https://example.com/nb/' ), array() );
+assert( false === $malformed_local_result['success'] );
+assert( 'invalid_local_cache_receipt' === $malformed_local_result['error']['code'] );
+
+$mismatched_local_receipt = $local_cache_receipt;
+$mismatched_local_receipt['purge']['urls'] = array( 'https://example.com/other/' );
+$mismatched_local_result = mcp_cloudflare_frontend_cache_invalidation_result( $mismatched_local_receipt, array( 'https://example.com/nb/' ), array() );
+assert( false === $mismatched_local_result['success'] );
+assert( 'invalid_local_cache_receipt' === $mismatched_local_result['error']['code'] );
+
+$unrelated_receipt = array( 'success' => true, 'adapter' => array( 'name' => 'unrelated' ), 'purge' => array( 'implementation' => 'unrelated' ) );
+$unrelated_result = mcp_cloudflare_frontend_cache_invalidation_result( $unrelated_receipt, array( 'https://example.com/nb/' ), array() );
+assert( false === $unrelated_result['success'] );
+assert( 'invalid_local_cache_receipt' === $unrelated_result['error']['code'] );
+
+$invalid_optional_result = mcp_cloudflare_frontend_cache_invalidation_result( $local_cache_receipt, array( 'javascript:alert(1)', 'https://outside.invalid/page/' ), array() );
+assert( false === $invalid_optional_result['success'] );
+assert( 'invalid_purge_targets' === $invalid_optional_result['error']['code'] );
 
 mcp_cloudflare_observe_plugin_upgrade_complete( new stdClass(), array( 'type' => 'plugin', 'action' => 'install', 'plugin' => 'sample/sample.php' ) );
 assert( false === $options['mcp_cloudflare_last_plugin_upgrade_purge']['success'] );

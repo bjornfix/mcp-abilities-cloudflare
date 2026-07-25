@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Cloudflare
  * Plugin URI: https://github.com/bjornfix/mcp-abilities-cloudflare
  * Description: Cloudflare abilities for MCP. Inspect and clear Cloudflare cache for WordPress sites.
- * Version: 1.0.16
+ * Version: 1.0.17
  * Author: basicus
  * Author URI: https://profiles.wordpress.org/basicus/
  * License: GPL-2.0+
@@ -651,7 +651,87 @@ function mcp_cloudflare_frontend_cache_invalidation_result( $current, $urls, $co
 		);
 	}
 
-	$result            = mcp_cloudflare_deep_purge( array( 'purge_everything' => false, 'files' => array_slice( $urls, 0, 100 ) ) );
+	$site_host       = strtolower( (string) wp_parse_url( home_url( '/' ), PHP_URL_HOST ) );
+	$normalized_urls = array();
+	foreach ( array_slice( $urls, 0, 100 ) as $url ) {
+		$normalized = is_string( $url ) ? esc_url_raw( $url ) : '';
+		$parts      = '' !== $normalized ? wp_parse_url( $normalized ) : false;
+		$scheme     = is_array( $parts ) ? strtolower( (string) ( $parts['scheme'] ?? '' ) ) : '';
+		$host       = is_array( $parts ) ? strtolower( (string) ( $parts['host'] ?? '' ) ) : '';
+		if (
+			'' === $site_host
+			|| ! in_array( $scheme, array( 'http', 'https' ), true )
+			|| ( $host !== $site_host && ! str_ends_with( $host, '.' . $site_host ) )
+		) {
+			$message = 'No valid cache purge targets were provided.';
+			return array(
+				'success' => false,
+				'message' => $message,
+				'error'   => array( 'code' => 'invalid_purge_targets', 'message' => $message ),
+				'purge'   => array( 'implementation' => 'mcp_cloudflare_deep_purge', 'completed' => array() ),
+			);
+		}
+		$normalized_urls[] = $normalized;
+	}
+	$normalized_urls = array_values( array_unique( $normalized_urls ) );
+
+	$local_cache_receipt = null;
+	if ( null !== $current ) {
+		if ( ! is_array( $current ) ) {
+			return array(
+				'success' => false,
+				'message' => 'The local cache Adapter did not return a valid receipt.',
+				'error'   => array( 'code' => 'invalid_local_cache_receipt', 'message' => 'The local cache Adapter did not return a valid receipt.' ),
+			);
+		}
+		if ( empty( $current['success'] ) ) {
+			return $current;
+		}
+		$receipt_urls         = $current['purge']['urls'] ?? null;
+		$receipt_count        = $current['purge']['count'] ?? null;
+		$active_local_receipt =
+			is_array( $receipt_urls )
+			&& $normalized_urls === $receipt_urls
+			&& is_int( $receipt_count )
+			&& count( $receipt_urls ) === $receipt_count;
+		$absent_local_receipt =
+			is_array( $receipt_urls )
+			&& $normalized_urls === $receipt_urls
+			&& 0 === $receipt_count
+			&& true === ( $current['local_cache']['skipped'] ?? null )
+			&& 'no_local_page_cache_configured' === (string) ( $current['local_cache']['reason'] ?? '' );
+		if (
+			'cache-enabler' !== (string) ( $current['adapter']['name'] ?? '' )
+			|| 'mcp_cache_enabler_frontend_cache_invalidation_result' !== (string) ( $current['purge']['implementation'] ?? '' )
+			|| ( ! $active_local_receipt && ! $absent_local_receipt )
+		) {
+			return array(
+				'success' => false,
+				'message' => 'The local cache Adapter did not return a valid receipt.',
+				'error'   => array( 'code' => 'invalid_local_cache_receipt', 'message' => 'The local cache Adapter did not return a valid receipt.' ),
+			);
+		}
+		$local_cache_receipt = $current;
+	}
+
+	$result = mcp_cloudflare_deep_purge( array( 'purge_everything' => false, 'files' => array_slice( $normalized_urls, 0, 100 ) ) );
+	if (
+		null !== $local_cache_receipt
+		&& empty( $result['success'] )
+		&& 'cloudflare_context' === (string) ( $result['error']['code'] ?? '' )
+		&& 'Cloudflare API credentials not configured. Install and configure the Cloudflare plugin first.' === (string) ( $result['message'] ?? '' )
+	) {
+		$local_cache_receipt['edge_cache'] = array(
+			'name' => 'cloudflare',
+			'skipped' => true,
+			'reason' => 'cloudflare_not_configured',
+			'context' => is_array( $context ) ? array_keys( $context ) : array(),
+		);
+		return $local_cache_receipt;
+	}
+	if ( null !== $local_cache_receipt && ! empty( $result['success'] ) ) {
+		$result['local_cache'] = $local_cache_receipt;
+	}
 	$result['adapter'] = array( 'name' => 'cloudflare', 'context' => is_array( $context ) ? array_keys( $context ) : array() );
 	return $result;
 }

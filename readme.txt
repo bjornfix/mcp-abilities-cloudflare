@@ -3,7 +3,7 @@ Contributors: basicus
 Tags: mcp, cloudflare, cache, ai, automation
 Requires at least: 6.9
 Tested up to: 7.0
-Stable tag: 1.0.16
+Stable tag: 1.0.17
 Requires PHP: 8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -24,6 +24,9 @@ Part of the MCP Expose Abilities ecosystem.
 4. Activate the plugin
 
 == Changelog ==
+
+= 1.0.17 =
+* Changed the shared cache Adapter to treat an unconfigured Cloudflare edge as optional when a prior local cache Adapter has already returned a successful purge receipt.
 
 = 1.0.16 =
 * Added: one reusable, bounded deep-purge implementation is shared by the MCP ability and cache-coherence hooks.
