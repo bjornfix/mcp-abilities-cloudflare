@@ -2,7 +2,7 @@
 
 Cloudflare abilities for MCP. Inspect and clear Cloudflare cache for WordPress sites.
 
-[![GitHub release](https://img.shields.io/github/v/release/bjornfix/mcp-abilities-cloudflare)](https://github.com/bjornfix/mcp-abilities-cloudflare/releases)
+[![Release 1.0.17](https://img.shields.io/badge/release-1.0.17-blue.svg)](https://downloads.devenia.com/mcp-abilities-cloudflare.zip)
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/gpl-2.0)
 [![WordPress](https://img.shields.io/badge/WordPress-6.9%2B-blue.svg)](https://wordpress.org)
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
@@ -85,6 +85,7 @@ It is especially useful when the manual version is repetitive enough that import
 
 Start with the main plugin page and base stack documentation:
 
+- [Stable plugin download](https://downloads.devenia.com/mcp-abilities-cloudflare.zip)
 - [MCP Expose Abilities](https://devenia.com/plugins/mcp-expose-abilities/)
 - [Plugin Page](https://devenia.com/plugins/mcp-expose-abilities/#add-ons)
 - [Getting Started](https://github.com/bjornfix/mcp-expose-abilities/wiki/Getting-Started)
