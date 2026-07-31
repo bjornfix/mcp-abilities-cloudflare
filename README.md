@@ -99,14 +99,21 @@ If you are using an AI agent, the simplest instruction is often just:
 
 If you are new to the stack, use this order:
 
-1. Install **Abilities API**.
-2. Install **MCP Adapter**.
-3. Install **MCP Expose Abilities**.
+1. Use **WordPress 6.9 or newer**, where the Abilities API provides the ability registry, schemas, and permission callbacks.
+2. Install the **MCP Adapter** to expose registered WordPress abilities through MCP.
+3. Install **MCP Expose Abilities** for the Devenia exposure and operating surface.
 4. Install **MCP Abilities - Cloudflare**.
-5. Confirm the new abilities appear in discovery.
-6. Give the agent a clear task that uses this add-on.
+5. Configure Cloudflare credentials through the official Cloudflare plugin or the supported WordPress constants.
+6. Confirm the new abilities appear in discovery before making a cache change.
 
 If you skip base-stack verification and start with add-ons immediately, troubleshooting gets harder than it needs to be.
+
+## Dependencies
+
+- [WordPress Abilities API](https://developer.wordpress.org/apis/abilities-api/) — required through WordPress 6.9 or newer; it registers, describes, validates, and permission-checks the abilities exposed by this add-on.
+- [WordPress MCP Adapter](https://developer.wordpress.org/news/2026/02/from-abilities-to-ai-agents-introducing-the-wordpress-mcp-adapter/) — required for MCP access; it turns registered WordPress abilities into MCP tools that an authenticated client can discover and call.
+- [MCP Expose Abilities](https://devenia.com/plugins/mcp-expose-abilities/) — required for the Devenia stack; it provides the established exposure, authentication, and operating surface used with these add-ons.
+- [Cloudflare for WordPress](https://wordpress.org/plugins/cloudflare/) — the standard credential provider for this add-on. Direct API work needs a Cloudflare API token or key; supported WordPress constants can provide the same credentials when the official plugin is not used.
 
 ## Abilities (8)
 
