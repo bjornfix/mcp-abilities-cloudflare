@@ -18,10 +18,10 @@ Part of the MCP Expose Abilities ecosystem.
 
 == Installation ==
 
-1. Install the required plugins (Abilities API, MCP Adapter, Cloudflare)
-2. Download the latest release
-3. Upload via WordPress Admin → Plugins → Add New → Upload Plugin
-4. Activate the plugin
+1. Use WordPress 6.9 or newer and PHP 8.0 or newer.
+2. Install and activate WordPress MCP Adapter.
+3. Configure Cloudflare API credentials through Cloudflare for WordPress or the supported constants.
+4. Download and install the stable package from https://downloads.devenia.com/mcp-abilities-cloudflare.zip.
 
 == Changelog ==
 

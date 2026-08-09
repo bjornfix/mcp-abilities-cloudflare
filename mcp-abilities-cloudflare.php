@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: MCP Abilities - Cloudflare
- * Plugin URI: https://github.com/bjornfix/mcp-abilities-cloudflare
+ * Plugin URI: https://devenia.com/plugins/mcp-abilities-cloudflare/
  * Description: Cloudflare abilities for MCP. Inspect and clear Cloudflare cache for WordPress sites.
  * Version: 1.0.17
  * Author: basicus
@@ -27,7 +27,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 function mcp_cloudflare_check_dependencies(): bool {
 	if ( ! function_exists( 'wp_register_ability' ) ) {
 		add_action( 'admin_notices', function () {
-			echo '<div class="notice notice-error"><p><strong>MCP Abilities - Cloudflare</strong> requires the <a href="https://github.com/WordPress/abilities-api">Abilities API</a> plugin to be installed and activated.</p></div>';
+			echo '<div class="notice notice-error"><p><strong>MCP Abilities - Cloudflare</strong> requires the <a href="https://developer.wordpress.org/apis/abilities-api/">WordPress Abilities API</a> available in WordPress 6.9 or newer.</p></div>';
 		} );
 		return false;
 	}
