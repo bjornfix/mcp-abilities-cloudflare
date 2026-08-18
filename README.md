@@ -2,13 +2,13 @@
 
 Cloudflare abilities for MCP. Inspect and clear Cloudflare cache for WordPress sites.
 
-[![Release 1.0.17](https://img.shields.io/badge/release-1.0.17-blue.svg)](https://downloads.devenia.com/mcp-abilities-cloudflare.zip)
+[![Release 1.0.18](https://img.shields.io/badge/release-1.0.18-blue.svg)](https://downloads.devenia.com/mcp-abilities-cloudflare.zip)
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/gpl-2.0)
 [![WordPress](https://img.shields.io/badge/WordPress-6.9%2B-blue.svg)](https://wordpress.org)
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
 
 **Tested up to:** 7.0
-**Stable tag:** 1.0.17
+**Stable tag:** 1.0.18
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -95,7 +95,7 @@ If you are new to the stack, use this order:
 1. Use **WordPress 6.9 or newer**, where the Abilities API provides the ability registry, schemas, and permission callbacks.
 2. Install the **MCP Adapter** to expose registered WordPress abilities through MCP.
 3. Install **MCP Abilities - Cloudflare**.
-4. Configure Cloudflare credentials through the official Cloudflare plugin or the supported WordPress constants.
+4. Configure Cloudflare credentials through `cloudflare/configure-credentials`, the official plugin settings, or the supported WordPress constants.
 5. Confirm the new abilities appear in discovery before making a cache change.
 
 If you skip base-stack verification and start with add-ons immediately, troubleshooting gets harder than it needs to be.
@@ -107,10 +107,11 @@ If you skip base-stack verification and start with add-ons immediately, troubles
 
 Cloudflare API work also needs a configured API token or key. [Cloudflare for WordPress](https://wordpress.org/plugins/cloudflare/) can provide those values, or the supported WordPress constants can provide them directly.
 
-## Abilities (8)
+## Abilities (9)
 
 | Ability | Description |
 |---------|-------------|
+| `cloudflare/configure-credentials` | Validate and store credentials through the official Cloudflare plugin without returning the secret |
 | `cloudflare/clear-cache` | Purge entire Cloudflare cache or specific URLs |
 | `cloudflare/get-zone` | Get active Cloudflare zone details |
 | `cloudflare/get-development-mode` | Read current Cloudflare Development Mode status |
@@ -165,6 +166,10 @@ Use this when Cloudflare accepts an exact URL purge but the final HTML object re
 ```
 
 ## Changelog
+
+### 1.0.18
+- Added a confirmed credential configuration ability that validates access before storing settings through the official Cloudflare plugin.
+- The credential is never included in the ability response.
 
 ### 1.0.17
 - Changed the shared cache Adapter to treat an unconfigured Cloudflare edge as optional when a prior local cache Adapter has already returned a successful purge receipt.

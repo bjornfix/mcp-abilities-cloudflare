@@ -3,7 +3,7 @@ Contributors: basicus
 Tags: mcp, cloudflare, cache, ai, automation
 Requires at least: 6.9
 Tested up to: 7.0
-Stable tag: 1.0.17
+Stable tag: 1.0.18
 Requires PHP: 8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -20,10 +20,14 @@ Part of the MCP Expose Abilities ecosystem.
 
 1. Use WordPress 6.9 or newer and PHP 8.0 or newer.
 2. Install and activate WordPress MCP Adapter.
-3. Configure Cloudflare API credentials through Cloudflare for WordPress or the supported constants.
+3. Install and activate Cloudflare for WordPress.
 4. Download and install the stable package from https://downloads.devenia.com/mcp-abilities-cloudflare.zip.
+5. Configure and validate the Cloudflare credentials through the dedicated ability or the official plugin settings.
 
 == Changelog ==
+
+= 1.0.18 =
+* Added: a confirmed configuration ability validates Cloudflare credentials before storing them through the official Cloudflare plugin and never returns the secret.
 
 = 1.0.17 =
 * Changed the shared cache Adapter to treat an unconfigured Cloudflare edge as optional when a prior local cache Adapter has already returned a successful purge receipt.

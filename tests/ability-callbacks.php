@@ -10,6 +10,30 @@ declare( strict_types=1 );
 
 define( 'ABSPATH', __DIR__ . '/' );
 
+class MCP_Cloudflare_Logger_Fixture {
+	public function __construct( $debug = false ) {}
+}
+
+class MCP_Cloudflare_Data_Store_Fixture {
+	public function __construct( $logger ) {}
+	public function createUserDataStore( $credential, $email, $unique_id, $user_key ): bool {
+		update_option( 'cloudflare_api_key', $credential );
+		update_option( 'cloudflare_api_email', $email );
+		return true;
+	}
+	public function setDomainNameCache( $domain ): bool {
+		update_option( 'cloudflare_cached_domain_name', $domain );
+		return true;
+	}
+	public function set( $name, $value ): bool {
+		update_option( $name, $value );
+		return true;
+	}
+}
+
+class_alias( MCP_Cloudflare_Logger_Fixture::class, 'Cloudflare\\APO\\Integration\\DefaultLogger' );
+class_alias( MCP_Cloudflare_Data_Store_Fixture::class, 'Cloudflare\\APO\\WordPress\\DataStore' );
+
 $registered_abilities = array();
 $remote_requests      = array();
 $registered_actions   = array();
@@ -58,9 +82,16 @@ function get_option( string $name, $default = '' ) {
 	return array_key_exists( $name, $options ) ? $options[ $name ] : $default;
 }
 
-function update_option( string $name, $value, $autoload = null ): void {
+function update_option( string $name, $value, $autoload = null ): bool {
 	global $options;
 	$options[ $name ] = $value;
+	return true;
+}
+
+function delete_option( string $name ): bool {
+	global $options;
+	unset( $options[ $name ] );
+	return true;
 }
 
 function wp_parse_url( string $url, int $component = -1 ) {
@@ -69,6 +100,10 @@ function wp_parse_url( string $url, int $component = -1 ) {
 
 function home_url( string $path = '' ): string {
 	return 'https://example.com';
+}
+
+function is_email( $email ): bool {
+	return false !== filter_var( $email, FILTER_VALIDATE_EMAIL );
 }
 
 function add_query_arg( string $key, string $value, string $url ): string {
@@ -221,6 +256,7 @@ assert( 2 === $registered_actions['upgrader_process_complete'][0]['accepted_args
 mcp_register_cloudflare_abilities();
 
 assert( isset( $registered_abilities['cloudflare/get-zone'] ) );
+assert( isset( $registered_abilities['cloudflare/configure-credentials'] ) );
 assert( isset( $registered_abilities['cloudflare/get-development-mode'] ) );
 assert( isset( $registered_abilities['cloudflare/get-cache-settings'] ) );
 assert( isset( $registered_abilities['cloudflare/get-cache-rulesets'] ) );
@@ -229,6 +265,40 @@ assert( isset( $registered_abilities['cloudflare/ensure-wordpress-html-cache-rul
 assert( isset( $registered_abilities['cloudflare/set-development-mode'] ) );
 assert( isset( $registered_abilities['cloudflare/clear-cache'] ) );
 assert( 'mcp_cloudflare_clear_cache_callback' === $registered_abilities['cloudflare/clear-cache']['execute_callback'] );
+
+$configure = $registered_abilities['cloudflare/configure-credentials']['execute_callback'];
+$before    = $options;
+$blocked   = $configure(
+	array(
+		'api_credential' => str_repeat( 'b', 40 ),
+		'email'          => 'owner@example.com',
+	)
+);
+assert( false === $blocked['success'] );
+assert( 'cloudflare_confirmation_required' === $blocked['code'] );
+assert( $before === $options );
+
+$configured = $configure(
+	array(
+		'api_credential'          => str_repeat( 'b', 40 ),
+		'email'                   => 'owner@example.com',
+		'confirm_dangerous_action' => 'cloudflare/configure-credentials',
+	)
+);
+assert( true === $configured['success'] );
+assert( true === $configured['configured'] );
+assert( 'zone-123' === $configured['zone_id'] );
+assert( str_repeat( 'b', 40 ) === $options['cloudflare_api_key'] );
+assert( 'owner@example.com' === $options['cloudflare_api_email'] );
+assert( 'zone-123' === $options['cloudflare_zone_id'] );
+assert( 'example.com' === $options['cloudflare_cached_domain_name'] );
+assert( ! isset( $options['cloudflare_api_token'] ) );
+assert( ! str_contains( wp_json_encode( $configured ), str_repeat( 'b', 40 ) ) );
+assert( 1 === count( $remote_requests ) );
+assert( str_contains( $remote_requests[0]['url'], '/zones?name=example.com' ) );
+assert( str_repeat( 'b', 40 ) === $remote_requests[0]['args']['headers']['X-Auth-Key'] );
+$options         = $before;
+$remote_requests = array();
 
 foreach ( array( 'cloudflare/get-zone', 'cloudflare/get-development-mode' ) as $ability_name ) {
 	$schema = $registered_abilities[ $ability_name ]['input_schema'];

@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Cloudflare
  * Plugin URI: https://devenia.com/plugins/mcp-abilities-cloudflare/
  * Description: Cloudflare abilities for MCP. Inspect and clear Cloudflare cache for WordPress sites.
- * Version: 1.0.17
+ * Version: 1.0.18
  * Author: basicus
  * Author URI: https://profiles.wordpress.org/basicus/
  * License: GPL-2.0+
@@ -407,6 +407,158 @@ function mcp_cloudflare_get_context() {
 	}
 
 	return $context;
+}
+
+/**
+ * Restore Cloudflare options after a failed configuration write.
+ *
+ * @param array<string,array{exists:bool,value:mixed}> $previous Previous option state.
+ * @return void
+ */
+function mcp_cloudflare_restore_configuration_options( array $previous ): void {
+	foreach ( $previous as $name => $state ) {
+		if ( $state['exists'] ) {
+			update_option( $name, $state['value'] );
+		} else {
+			delete_option( $name );
+		}
+	}
+}
+
+/**
+ * Configure the official Cloudflare plugin after validating the credential.
+ *
+ * @param mixed $input Ability input.
+ * @return array
+ */
+function mcp_cloudflare_configure_credentials_callback( $input = array() ): array {
+	$input        = mcp_cloudflare_normalize_input( $input );
+	$confirmation = isset( $input['confirm_dangerous_action'] ) ? (string) $input['confirm_dangerous_action'] : '';
+	if ( ! hash_equals( 'cloudflare/configure-credentials', $confirmation ) ) {
+		return array(
+			'success' => false,
+			'code'    => 'cloudflare_confirmation_required',
+			'message' => 'This action requires exact confirmation: cloudflare/configure-credentials',
+		);
+	}
+
+	$credential = isset( $input['api_credential'] ) ? trim( (string) $input['api_credential'] ) : '';
+	$email      = isset( $input['email'] ) ? trim( (string) $input['email'] ) : '';
+	if ( '' === $credential || '' === $email || ! is_email( $email ) ) {
+		return array(
+			'success' => false,
+			'code'    => 'cloudflare_invalid_credentials',
+			'message' => 'A Cloudflare API credential and valid account email are required.',
+		);
+	}
+
+	foreach ( array( 'CLOUDFLARE_API_KEY', 'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_EMAIL', 'CLOUDFLARE_DOMAIN_NAME' ) as $constant_name ) {
+		if ( defined( $constant_name ) && '' !== trim( (string) constant( $constant_name ) ) ) {
+			return array(
+				'success' => false,
+				'code'    => 'cloudflare_constants_override',
+				'message' => 'Cloudflare constants override the official plugin settings and must be removed before configuration.',
+			);
+		}
+	}
+
+	$store_class  = '\\Cloudflare\\APO\\WordPress\\DataStore';
+	$logger_class = '\\Cloudflare\\APO\\Integration\\DefaultLogger';
+	if ( ! class_exists( $store_class ) || ! class_exists( $logger_class ) ) {
+		return array(
+			'success' => false,
+			'code'    => 'cloudflare_plugin_required',
+			'message' => 'The official Cloudflare plugin must be installed and active before configuration.',
+		);
+	}
+
+	$domain = strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) );
+	if ( '' === $domain ) {
+		return array(
+			'success' => false,
+			'code'    => 'cloudflare_domain_missing',
+			'message' => 'The WordPress site domain could not be determined.',
+		);
+	}
+
+	$context = array(
+		'api_email' => $email,
+		'api_key'   => $credential,
+		'api_token' => mcp_cloudflare_is_global_api_key( $credential ) ? '' : $credential,
+		'zone_id'   => '',
+		'domain'    => $domain,
+	);
+	$zones   = mcp_cloudflare_api_request(
+		'GET',
+		add_query_arg( 'name', $domain, 'https://api.cloudflare.com/client/v4/zones' ),
+		$context
+	);
+	if ( is_wp_error( $zones ) ) {
+		return array(
+			'success' => false,
+			'code'    => 'cloudflare_validation_failed',
+			'message' => $zones->get_error_message(),
+		);
+	}
+
+	$body = $zones['body'];
+	if ( empty( $body['success'] ) || empty( $body['result'][0]['id'] ) || empty( $body['result'][0]['name'] ) ) {
+		$error_message = mcp_cloudflare_api_error_message( $body );
+		return array(
+			'success' => false,
+			'code'    => 'cloudflare_validation_failed',
+			'message' => 'Cloudflare API error: ' . ( 'Unknown error' === $error_message ? 'Zone not found' : $error_message ),
+		);
+	}
+
+	$zone_id   = (string) $body['result'][0]['id'];
+	$zone_name = strtolower( (string) $body['result'][0]['name'] );
+	$names     = array(
+		'cloudflare_api_key',
+		'cloudflare_api_email',
+		'cloudflare_api_token',
+		'cloudflare_zone_id',
+		'cloudflare_cached_domain_name',
+	);
+	$missing   = new stdClass();
+	$previous  = array();
+	foreach ( $names as $name ) {
+		$value             = get_option( $name, $missing );
+		$previous[ $name ] = array(
+			'exists' => $missing !== $value,
+			'value'  => $value,
+		);
+	}
+
+	$logger = new $logger_class( false );
+	$store  = new $store_class( $logger );
+	$store->createUserDataStore( $credential, $email, null, null );
+	$store->setDomainNameCache( $zone_name );
+	$store->set( 'cloudflare_zone_id', $zone_id );
+	delete_option( 'cloudflare_api_token' );
+
+	if (
+		! hash_equals( $credential, (string) get_option( 'cloudflare_api_key', '' ) ) ||
+		! hash_equals( $email, (string) get_option( 'cloudflare_api_email', '' ) ) ||
+		! hash_equals( $zone_id, (string) get_option( 'cloudflare_zone_id', '' ) ) ||
+		! hash_equals( $zone_name, (string) get_option( 'cloudflare_cached_domain_name', '' ) )
+	) {
+		mcp_cloudflare_restore_configuration_options( $previous );
+		return array(
+			'success' => false,
+			'code'    => 'cloudflare_configuration_write_failed',
+			'message' => 'Cloudflare credentials were valid, but the official plugin settings could not be stored.',
+		);
+	}
+
+	return array(
+		'success'   => true,
+		'configured' => true,
+		'message'   => 'The official Cloudflare plugin is configured.',
+		'domain'    => $zone_name,
+		'zone_id'   => $zone_id,
+		'auth_mode' => (string) $zones['auth_mode'],
+	);
 }
 
 /**
@@ -996,6 +1148,61 @@ function mcp_register_cloudflare_abilities(): void {
 	if ( ! mcp_cloudflare_check_dependencies() ) {
 		return;
 	}
+
+	// =========================================================================
+	// CLOUDFLARE - Configure Credentials
+	// =========================================================================
+	wp_register_ability(
+		'cloudflare/configure-credentials',
+		array(
+			'label'               => 'Configure Cloudflare Credentials',
+			'description'         => 'Validate and store Cloudflare credentials through the official Cloudflare plugin.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'api_credential', 'email', 'confirm_dangerous_action' ),
+				'properties'           => array(
+					'api_credential' => array(
+						'type'        => 'string',
+						'minLength'   => 1,
+						'description' => 'Cloudflare API token or Global API Key. The value is never returned.',
+					),
+					'email' => array(
+						'type'        => 'string',
+						'format'      => 'email',
+						'description' => 'Cloudflare account email used by the official plugin.',
+					),
+					'confirm_dangerous_action' => array(
+						'type'        => 'string',
+						'const'       => 'cloudflare/configure-credentials',
+						'description' => 'Exact confirmation required to replace stored Cloudflare credentials.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'    => array( 'type' => 'boolean' ),
+					'configured' => array( 'type' => 'boolean' ),
+					'message'    => array( 'type' => 'string' ),
+					'code'       => array( 'type' => 'string' ),
+					'domain'     => array( 'type' => 'string' ),
+					'zone_id'    => array( 'type' => 'string' ),
+					'auth_mode'  => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => 'mcp_cloudflare_configure_credentials_callback',
+			'permission_callback' => 'mcp_cloudflare_permission_callback',
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
 
 	// =========================================================================
 	// CLOUDFLARE - Clear Cache
