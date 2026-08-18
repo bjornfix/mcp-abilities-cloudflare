@@ -3,7 +3,7 @@ Contributors: basicus
 Tags: mcp, cloudflare, cache, ai, automation
 Requires at least: 6.9
 Tested up to: 7.0
-Stable tag: 1.0.18
+Stable tag: 1.0.19
 Requires PHP: 8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -26,8 +26,9 @@ Part of the MCP Expose Abilities ecosystem.
 
 == Changelog ==
 
-= 1.0.18 =
+= 1.0.19 =
 * Added: a confirmed configuration ability validates Cloudflare credentials before storing them through the official Cloudflare plugin and never returns the secret.
+* Fixed: calls without confirmation return a structured refusal before any credential validation or storage.
 
 = 1.0.17 =
 * Changed the shared cache Adapter to treat an unconfigured Cloudflare edge as optional when a prior local cache Adapter has already returned a successful purge receipt.

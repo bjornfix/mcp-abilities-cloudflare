@@ -265,6 +265,7 @@ assert( isset( $registered_abilities['cloudflare/ensure-wordpress-html-cache-rul
 assert( isset( $registered_abilities['cloudflare/set-development-mode'] ) );
 assert( isset( $registered_abilities['cloudflare/clear-cache'] ) );
 assert( 'mcp_cloudflare_clear_cache_callback' === $registered_abilities['cloudflare/clear-cache']['execute_callback'] );
+assert( array( 'api_credential', 'email' ) === $registered_abilities['cloudflare/configure-credentials']['input_schema']['required'] );
 
 $configure = $registered_abilities['cloudflare/configure-credentials']['execute_callback'];
 $before    = $options;

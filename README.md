@@ -2,13 +2,13 @@
 
 Cloudflare abilities for MCP. Inspect and clear Cloudflare cache for WordPress sites.
 
-[![Release 1.0.18](https://img.shields.io/badge/release-1.0.18-blue.svg)](https://downloads.devenia.com/mcp-abilities-cloudflare.zip)
+[![Release 1.0.19](https://img.shields.io/badge/release-1.0.19-blue.svg)](https://downloads.devenia.com/mcp-abilities-cloudflare.zip)
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/gpl-2.0)
 [![WordPress](https://img.shields.io/badge/WordPress-6.9%2B-blue.svg)](https://wordpress.org)
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
 
 **Tested up to:** 7.0
-**Stable tag:** 1.0.18
+**Stable tag:** 1.0.19
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -167,9 +167,10 @@ Use this when Cloudflare accepts an exact URL purge but the final HTML object re
 
 ## Changelog
 
-### 1.0.18
+### 1.0.19
 - Added a confirmed credential configuration ability that validates access before storing settings through the official Cloudflare plugin.
 - The credential is never included in the ability response.
+- Calls without confirmation return a structured refusal before any credential validation or storage.
 
 ### 1.0.17
 - Changed the shared cache Adapter to treat an unconfigured Cloudflare edge as optional when a prior local cache Adapter has already returned a successful purge receipt.
