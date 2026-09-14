@@ -1,250 +1,205 @@
-# MCP Abilities - Cloudflare
+# MCP Abilities – Cloudflare
 
-Cloudflare abilities for MCP. Inspect and clear Cloudflare cache for WordPress sites.
+Find which cached copy is out of date, inspect the connected Cloudflare zone, choose a purge scope and verify what the visitor receives. This WordPress add-on exposes Cloudflare cache diagnostics and changes through an authenticated MCP connection.
 
-[![Release 1.0.19](https://img.shields.io/badge/release-1.0.19-blue.svg)](https://downloads.devenia.com/mcp-abilities-cloudflare.zip)
-[![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/gpl-2.0)
-[![WordPress](https://img.shields.io/badge/WordPress-6.9%2B-blue.svg)](https://wordpress.org)
-[![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
+[![Stable download](https://img.shields.io/badge/stable-1.0.19-blue)](https://downloads.devenia.com/mcp-abilities-cloudflare.zip)
+[![License](https://img.shields.io/badge/license-GPLv2%2B-blue)](https://www.gnu.org/licenses/gpl-2.0.html)
+[![WordPress](https://img.shields.io/badge/WordPress-6.9%2B-blue)](https://wordpress.org/)
+[![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple)](https://www.php.net/)
+
+**Current stable download:** 1.0.19
+
+**Source version / Stable tag:** 1.0.20, unreleased
 
 **Tested up to:** 7.0
-**Stable tag:** 1.0.19
+
+**Tags:** mcp, cloudflare, cache, ai, automation
+
 **License:** GPLv2 or later
-**License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
 ## What It Does
 
-Cloudflare abilities for MCP. Inspect and clear Cloudflare cache for WordPress sites.
+The add-on reads Cloudflare zone details, cache settings, cache rules and Development Mode. It probes public URL response headers and can purge cached resources, change Development Mode or propose an anonymous WordPress HTML cache rule.
 
-This plugin is part of the Devenia MCP abilities ecosystem. It gives an MCP-capable agent a focused, authenticated way to work with Cloudflare work inside WordPress through MCP.
-
-**Example:** "Handle this WordPress maintenance task directly." - The agent can inspect the site, call the relevant ability, and return the result without making the human click through wp-admin for every step.
+Cloudflare is one cache layer. A successful purge does not correct unsaved content, purge a visitor's browser or prove that the origin supplies the updated page.
 
 ## The Real Workflow
 
-In practice, the human should not have to memorize every ability name.
-
-The normal pattern is:
-
-1. install the base MCP stack
-2. install only the add-ons the site actually needs
-3. let the agent discover the available abilities
-4. give the agent a clear task with boundaries
-5. verify the result in WordPress
-
-The human's job is mostly to describe the goal.
-The agent's job is to figure out the mechanics.
+1. Confirm the saved WordPress change and the exact public URL.
+2. Read the connected Cloudflare zone, then inspect the relevant response headers and rules.
+3. Choose the smallest suitable purge scope. For targeted work, set `purge_everything: false` explicitly.
+4. Read the purge response, including completed operations if a later operation failed.
+5. Fetch the public page again and verify the actual changed content. Investigate local and browser caching separately.
 
 ## Why This Feels Different
 
-Most WordPress automation still leaves the repetitive part to the human.
-
-This plugin is different because the agent can act inside the site through a narrow, authenticated ability surface:
-
-- inspect current site state before changing anything
-- run the specific action needed for the task
-- return structured results that are easy to verify
-- keep the workflow inside WordPress instead of a separate checklist
-
-That changes the experience from:
-
-- `Here is what you should do in wp-admin`
-
-to:
-
-- `Tell the agent what needs doing, and let it carry out the work`
+An assistant can read cache evidence and issue a chosen cache action through one authenticated WordPress connection. The response identifies the purge operations and automatic HTML-to-prefix conversions, helping the operator understand what was requested.
 
 ## Before vs After
 
-### Before
-
-- ask the AI what to do
-- copy the answer into WordPress by hand
-- click through wp-admin for the repetitive bits
-- postpone maintenance because the task is tedious
-
-### After
-
-- tell the agent what needs doing
-- let it inspect the relevant WordPress state
-- let it run the targeted ability
-- verify the result and move on
+| Without the add-on | With the add-on |
+| --- | --- |
+| Guess which cache contains the old page. | Inspect Cloudflare headers, settings and the connected zone. |
+| Treat every URL as a single cached file. | See when an HTML URL becomes a broader prefix purge. |
+| Stop after the API says the purge succeeded. | Use the result to follow up with a real public-page check. |
 
 ## Who It Is For
 
-This is a good fit for:
+WordPress operators and developers who use Cloudflare and an authenticated MCP client, and need to diagnose stale public responses or make deliberate cache changes.
 
-- agencies managing WordPress sites with AI-assisted maintenance
-- operators who want agents to do real WordPress work instead of producing instructions
-- teams already using MCP Expose Abilities
-- sites where this WordPress area is updated often enough to deserve automation
+## Requirements
 
-It is especially useful when the manual version is repetitive enough that important maintenance gets delayed.
+- WordPress 6.9 or later, which includes the [Abilities API](https://developer.wordpress.org/apis/abilities-api/).
+- PHP 8.0 or later as the declared minimum; use a maintained PHP version supported by your site.
+- A [WordPress MCP Adapter](https://github.com/WordPress/mcp-adapter/) connection configured to expose the required abilities. Confirm discovery before making changes.
+- A WordPress account with `manage_options`; every ability uses this permission.
+- Cloudflare credentials for the intended zone and operations. The [Cache Purge API](https://developers.cloudflare.com/api/resources/cache/methods/purge/) requires Cache Purge permission; diagnostics and rule changes need the relevant read or edit permissions too.
+
+The official [Cloudflare for WordPress plugin](https://wordpress.org/plugins/cloudflare/) can supply stored credentials. It is required for the dedicated credential-configuration action. Other actions can also use supported WordPress constants.
 
 ## Documentation
 
-Start with the plugin page and stable package:
-
-- [Stable plugin download](https://downloads.devenia.com/mcp-abilities-cloudflare.zip)
-- [Plugin page](https://devenia.com/plugins/mcp-abilities-cloudflare/)
+- [Product page](https://devenia.com/plugins/mcp-abilities-cloudflare/)
+- [Cloudflare purge methods and limits](https://developers.cloudflare.com/cache/how-to/purge-cache/)
+- [Prefix purge behaviour](https://developers.cloudflare.com/cache/how-to/purge-cache/purge_by_prefix/)
+- [Development Mode](https://developers.cloudflare.com/cache/reference/development-mode/)
+- [Cache-rule settings](https://developers.cloudflare.com/cache/how-to/cache-rules/settings/)
 
 ## Start Here
 
-If you are new to the stack, use this order:
+Ask your assistant: “Confirm the connected Cloudflare zone and inspect the headers for https://example.com/classes/. Explain whether the evidence points to edge caching and what a targeted purge would cover. After the chosen purge, check the actual page content.”
 
-1. Use **WordPress 6.9 or newer**, where the Abilities API provides the ability registry, schemas, and permission callbacks.
-2. Install the **MCP Adapter** to expose registered WordPress abilities through MCP.
-3. Install **MCP Abilities - Cloudflare**.
-4. Configure Cloudflare credentials through `cloudflare/configure-credentials`, the official plugin settings, or the supported WordPress constants.
-5. Confirm the new abilities appear in discovery before making a cache change.
-
-If you skip base-stack verification and start with add-ons immediately, troubleshooting gets harder than it needs to be.
-
-## Dependencies
-
-- [WordPress Abilities API](https://developer.wordpress.org/apis/abilities-api/) — required through WordPress 6.9 or newer; it registers, describes, validates, and permission-checks the abilities exposed by this add-on.
-- [WordPress MCP Adapter](https://github.com/WordPress/mcp-adapter/) — required for MCP access; it turns registered WordPress abilities into MCP tools that an authenticated client can discover and call.
-
-Cloudflare API work also needs a configured API token or key. [Cloudflare for WordPress](https://wordpress.org/plugins/cloudflare/) can provide those values, or the supported WordPress constants can provide them directly.
+Do not supply a credential in a public prompt or report. Use your client's established secret-handling process or configure the official plugin directly.
 
 ## Abilities (9)
 
-| Ability | Description |
-|---------|-------------|
-| `cloudflare/configure-credentials` | Validate and store credentials through the official Cloudflare plugin without returning the secret |
-| `cloudflare/clear-cache` | Purge entire Cloudflare cache or specific URLs |
-| `cloudflare/get-zone` | Get active Cloudflare zone details |
-| `cloudflare/get-development-mode` | Read current Cloudflare Development Mode status |
-| `cloudflare/get-cache-settings` | Read relevant Cloudflare cache/performance zone settings |
-| `cloudflare/get-cache-rulesets` | Read Cloudflare rulesets and the cache-settings entrypoint |
-| `cloudflare/test-url-cache-status` | Probe public URLs and report Cloudflare cache headers |
-| `cloudflare/ensure-wordpress-html-cache-rule` | Create or update a conservative anonymous WordPress HTML cache rule |
-| `cloudflare/set-development-mode` | Enable or disable Cloudflare Development Mode |
+| Ability | Purpose |
+| --- | --- |
+| `cloudflare/configure-credentials` | Validate zone access, then store credentials through the official plugin after exact confirmation. |
+| `cloudflare/clear-cache` | Purge files, prefixes, hosts, tags or the connected zone. |
+| `cloudflare/get-zone` | Read the configured zone's details. |
+| `cloudflare/get-development-mode` | Read Development Mode state. |
+| `cloudflare/get-cache-settings` | Read selected zone settings; up to 25 setting names. |
+| `cloudflare/get-cache-rulesets` | Read zone rulesets and the cache-settings entrypoint. |
+| `cloudflare/test-url-cache-status` | Probe public URLs and report HTTP and cache-related headers. |
+| `cloudflare/ensure-wordpress-html-cache-rule` | Preview or write the add-on's HTML cache rule in an existing cache-settings ruleset. |
+| `cloudflare/set-development-mode` | Set Development Mode to `on` or `off`. |
 
 ## Usage Examples
 
-### Clear entire cache
+### Inspect public responses
+
+Call `cloudflare/test-url-cache-status`:
+
+```json
+{"urls":["https://example.com/classes/"],"repeat":2,"method":"GET"}
+```
+
+The probe handles at most 20 distinct URLs. `repeat` ranges from 1 to 3 and defaults to 2; `method` is `GET` or `HEAD`. It reports each attempt's HTTP status, `cf-cache-status`, `cache-control`, `age`, `cf-ray`, `server`, `content-type`, `vary` and whether `set-cookie` is present.
+
+The response does not contain a content comparison. Its outer `success` means the probe finished; inspect individual attempts and HTTP status codes. The probe sends requests and can populate a cache.
+
+### Purge selected resources
+
+Call `cloudflare/clear-cache`:
 
 ```json
 {
-  "ability_name": "cloudflare/clear-cache",
-  "parameters": {
-    "purge_everything": true
-  }
+  "purge_everything": false,
+  "files": ["https://example.com/classes/", "https://example.com/assets/styles.css"]
 }
 ```
 
-### Clear specific URLs
+Extensionless and `.html` paths without query strings become prefix purges; asset URLs and URLs with query strings remain exact file purges. The response's `auto_prefixes` records the conversions. A slash is added to extensionless paths when absent, so verify the intended canonical path.
+
+Each exposed input list accepts at most 100 items. In source version 1.0.20, the shared implementation validates the complete list, retains combined explicit and automatic prefixes and sends requests of at most 100 targets. It stops on a failed request and preserves details of already completed requests. Cloudflare account rate limits still apply.
+
+### Purge a branch
 
 ```json
-{
-  "ability_name": "cloudflare/clear-cache",
-  "parameters": {
-    "purge_everything": false,
-    "files": [
-      "https://example.com/page-1/",
-      "https://example.com/page-2/"
-    ]
-  }
-}
+{"purge_everything":false,"prefixes":["example.com/classes/"]}
 ```
 
-### Clear a URL prefix
+A prefix also covers resources beneath that path. Accepted input can be `host/path` or a full URL; Cloudflare receives the scheme-less form. Query strings and fragments are not accepted in prefix purges. Use `hosts` or `tags` for their corresponding groups, or `purge_everything: true` for an intended zone-wide purge without specific targets.
 
-Use this when Cloudflare accepts an exact URL purge but the final HTML object remains cached.
+The string-only file input cannot send custom cache-key headers. For those objects, choose an appropriate supported purge scope; see [Cloudflare's cache-key guidance](https://developers.cloudflare.com/cache/how-to/purge-cache/purge-cache-key/).
+
+### Preview an HTML cache rule
+
+Call `cloudflare/ensure-wordpress-html-cache-rule`:
 
 ```json
-{
-  "ability_name": "cloudflare/clear-cache",
-  "parameters": {
-    "purge_everything": false,
-    "prefixes": [
-      "https://example.com/page/"
-    ]
-  }
-}
+{"host":"example.com","dry_run":true,"edge_ttl_seconds":7200,"exclude_paths":["/members/"]}
 ```
+
+The action requires a readable existing cache-settings entrypoint. It preserves unrelated rules, previews by default, and writes when `dry_run` is false. `enabled` defaults to true. The declared TTL range is 60–86400 seconds, default 3600; Cloudflare plan constraints may reject a value.
+
+The rule selects GET/HEAD HTML paths without queries and excludes several standard WordPress paths and session cookies. It sets an edge TTL that overrides origin cache instructions. Do not treat the rule as proof that custom login, account, checkout or personalised routes are safe to cache.
+
+In source version 1.0.20, `/members/` excludes both `/members` and descendants under `/members/`, while a different path such as `/membership/` remains outside that exclusion. Existing custom exclusions are retained when `exclude_paths` is omitted. Inspect the proposed expression and test your actual routes and cookies before enabling the rule.
+
+### Configure credentials
+
+`cloudflare/configure-credentials` takes `api_credential`, `email` and the exact `confirm_dangerous_action` value `cloudflare/configure-credentials`. It requires the official Cloudflare plugin, refuses conflicting credential/domain constants and does not return the credential value.
+
+The action looks up a zone using the WordPress hostname. A subdomain that is not itself a Cloudflare zone may require prior configuration of the correct zone through the official plugin or constants. Zone-read validation does not prove that every purge or rule permission is available.
+
+Supported constants are `CLOUDFLARE_EMAIL`, `CLOUDFLARE_API_KEY`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ZONE_ID` and `CLOUDFLARE_DOMAIN_NAME`.
+
+## Current Download Limits
+
+The stable download is still 1.0.19. The 1.0.20 changes above are not yet in that download.
+
+- An empty purge call defaults to the whole zone. Invalid targets can be discarded and leave a zone-wide default purge. Explicitly set `purge_everything: false` for targeted work and validate every target.
+- Shared frontend invalidation only considers the first 100 URLs. Combined explicit and automatically generated prefixes can also be truncated to 100.
+- Custom HTML-cache exclusions match the normalised trailing-slash path only. They do not exclude the unslashed form or descendants. Inspect the expression and do not assume a requested subtree is excluded.
+
+## Ownership and Automatic Behaviour
+
+Cloudflare owns the edge cache and API permissions. WordPress owns the saved content and local cache; the visitor's browser has its own cache. Purging one does not prove the others are current.
+
+Development Mode temporarily bypasses Cloudflare caching for up to three hours unless disabled earlier; it does not purge stored files.
+
+The add-on attempts a public-host root-prefix purge after a completed plugin install or update and records the result. This can clear more than the specific page being investigated.
+
+The shared `devenia_workflow_frontend_cache_invalidation_result` hook accepts frontend URL invalidation requests. It can combine a matching local-cache result with the Cloudflare purge. Without configured Cloudflare credentials, a valid local-cache receipt can be returned with the edge step explicitly skipped; that does not mean a configured Cloudflare cache was purged.
+
+## Installation
+
+1. Download the [stable ZIP](https://downloads.devenia.com/mcp-abilities-cloudflare.zip) and install it through WordPress.
+2. Configure the correct Cloudflare credentials and zone, using the official plugin or supported constants.
+3. Connect the MCP client, confirm the required abilities are discoverable and read the zone before requesting changes.
+4. Check the limits for the installed version above.
 
 ## Changelog
 
+### 1.0.20 — unreleased
+
+- Reject invalid purge targets before cache changes.
+- Process complete shared target lists in requests of at most 100 targets; retain combined prefixes and completed-operation details.
+- Make custom HTML-cache path exclusions cover the root and descendants and retain them on later updates.
+- Remove the outdated Enterprise-only description for tag purges.
+
 ### 1.0.19
-- Added a confirmed credential configuration ability that validates access before storing settings through the official Cloudflare plugin.
-- The credential is never included in the ability response.
-- Calls without confirmation return a structured refusal before any credential validation or storage.
+
+- Add confirmed credential configuration through the official Cloudflare plugin, validating zone access without returning the secret.
 
 ### 1.0.17
-- Changed the shared cache Adapter to treat an unconfigured Cloudflare edge as optional when a prior local cache Adapter has already returned a successful purge receipt.
+
+- Report an unconfigured edge step as skipped when a valid local-cache result is available.
 
 ### 1.0.16
-- Added one reusable, bounded deep-purge implementation shared by the MCP ability and cache-coherence hooks.
-- Added generic frontend URL invalidation through HTML prefix purges, including structured success and failure results.
-- Added a post-completion plugin install/update observer that purges the public HTML root prefix and records bounded status without interrupting the upgrader.
 
-### 1.0.15
-- Removed organization-specific runtime identity from cache probes and managed WordPress HTML cache rules.
-- Existing equivalent rules are recognized by policy behavior rather than a branded label or reference.
-
-### 1.0.13
-- Changed `cloudflare/clear-cache` so extensionless/html URLs passed in `files` are automatically purged as Cloudflare prefixes.
-- Exact file purges are still used for asset URLs, and mixed HTML/assets input is split into the correct purge operations.
-
-### 1.0.12
-- Fixed prefix purge normalization so callers can pass either full URLs or Cloudflare `host/path` prefixes.
-
-### 1.0.11
-- Added URL prefix purge support for cases where exact URL purge reports success but cached HTML variants remain HIT.
-- Added structured purge metadata to `cloudflare/clear-cache` responses, including purge type, payload keys, Cloudflare purge ID, and auth mode.
-
-### 1.0.10
-- Added `cloudflare/ensure-wordpress-html-cache-rule` with dry-run by default.
-- The new rule preserves existing Cloudflare cache rules and only targets anonymous public WordPress HTML requests.
-
-### 1.0.9
-- Added read-only cache diagnostics for Cloudflare zone cache settings.
-- Added read-only ruleset inspection for the `http_request_cache_settings` entrypoint.
-- Added URL cache-status probes that report `cf-cache-status`, `cache-control`, `age`, `set-cookie`, and related headers.
-
-### 1.0.8
-- Fixed Cloudflare API Token installs where the official Cloudflare plugin stores the token in `cloudflare_api_key`.
-- Matched the official Cloudflare plugin's Global API Key vs API Token credential-format detection.
-- Retried cache purge requests with alternate auth when Cloudflare returns `Authentication error`.
-- Updated zero-parameter ability schemas to accept the empty/null representations that MCP/WordPress paths can produce for `{}`.
-
-### 1.0.7
-- Fixed zero-parameter schemas so they stay object-shaped without using stdClass-backed `properties`.
-- Fixed validator-path `Cannot use object of type stdClass as array` failures for object-shaped inputs.
-
-### 1.0.6
-- Fixed stdClass-shaped MCP inputs and Cloudflare API response data normalization before array access.
-- Fixed `cloudflare/get-zone` so `{}` calls do not throw `Cannot use object of type stdClass as array`.
-
-### 1.0.5
-- Fixed Cloudflare API auth handling for installs using API tokens instead of only email + global API key.
-- Added auth-header fallback for Cloudflare responses that report invalid request headers.
-- Fixed zero-parameter abilities so `{}` inputs are accepted by MCP clients.
-
-### 1.0.4
-- Fixed zero-parameter ability schemas so MCP Adapter 0.4.x clients do not receive invalid `properties: []` JSON
-
-### 1.0.3
-- Fixed: Removed hard plugin header dependency on abilities-api to avoid slug-mismatch activation blocking
-
-### 1.0.2
-- Improve zone ID lookup caching and API header reuse
-
-### 1.0.1
-- Added: Stored zone_id optimization
-
-### 1.0.0
-- Initial release
+- Share purge behaviour between the ability and frontend invalidation hook.
+- Observe completed plugin installs and updates to purge the public host prefix.
 
 ## Contributing
 
-PRs welcome. Keep changes focused on the plugin's WordPress ability surface and preserve authenticated, explicit workflows.
+Keep changes in the owning ability or shared cache implementation. Test target coverage, invalid inputs, partial failures and the proposed rule expression through the public callbacks.
 
 ## License
 
-GPL-2.0+
+[GPLv2 or later](https://www.gnu.org/licenses/gpl-2.0.html).
 
 ## Author
 
@@ -252,18 +207,6 @@ GPL-2.0+
 
 ## Links
 
-- [Plugin Page](https://devenia.com/plugins/mcp-expose-abilities/#add-ons)
-- [MCP Expose Abilities](https://devenia.com/plugins/mcp-expose-abilities/)
-- [GitHub Releases](https://github.com/bjornfix/mcp-abilities-cloudflare/releases)
-
-## Star and Share
-
-If this plugin saves you time or makes WordPress maintenance easier to verify, please:
-
-- star the repo
-- share it with people running WordPress sites
-- point them to the main plugin page so they can see what the ecosystem can actually do
-
-Why do it?
-
-Because agent-friendly open WordPress tooling helps more of the boring but important work get done.
+- [Product page](https://devenia.com/plugins/mcp-abilities-cloudflare/)
+- [Stable download](https://downloads.devenia.com/mcp-abilities-cloudflare.zip)
+- [Optional source mirror](https://github.com/bjornfix/mcp-abilities-cloudflare)

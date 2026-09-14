@@ -3,7 +3,7 @@ Contributors: basicus
 Tags: mcp, cloudflare, cache, ai, automation
 Requires at least: 6.9
 Tested up to: 7.0
-Stable tag: 1.0.19
+Stable tag: 1.0.20
 Requires PHP: 8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -12,19 +12,37 @@ Cloudflare cache diagnostics and cache management for WordPress via MCP.
 
 == Description ==
 
-This add-on plugin exposes Cloudflare cache diagnostics and cache management through MCP (Model Context Protocol).
+Inspect Cloudflare's connected zone, cache settings, rulesets and public response headers from an authenticated WordPress MCP client. Choose a cache purge scope, then verify the actual page content separately.
 
-Part of the MCP Expose Abilities ecosystem.
+The nine abilities are `cloudflare/configure-credentials`, `cloudflare/clear-cache`, `cloudflare/get-zone`, `cloudflare/get-development-mode`, `cloudflare/get-cache-settings`, `cloudflare/get-cache-rulesets`, `cloudflare/test-url-cache-status`, `cloudflare/ensure-wordpress-html-cache-rule` and `cloudflare/set-development-mode`. All require the WordPress permission to manage site options.
+
+For targeted purges, explicitly set `purge_everything: false`. The default empty purge call clears the connected zone. HTML paths without query strings become broader prefix purges; assets and query-string URLs remain exact file purges. Inspect automatic conversions and the scope before making changes. Version 1.0.20 rejects invalid targets before purging and processes the complete shared target list in requests of at most 100 items. A failed later request retains the completed-operation details. Cloudflare rate limits still apply.
+
+The URL probe handles at most 20 URLs, returning response headers rather than a content comparison. Read each attempt's HTTP status and result. A successful purge response does not prove that the origin supplied the corrected page or that the visitor's browser cache is current.
+
+The HTML cache-rule action previews by default and requires an existing cache-settings entrypoint. Its edge TTL can override origin cache instructions. Review custom login, account, checkout and personalised routes before enabling it. Custom excluded paths cover the path root and descendants in version 1.0.20 and remain preserved when omitted from later updates.
+
+Development Mode temporarily bypasses Cloudflare caching; it does not purge stored files. The add-on also attempts a public-host root-prefix purge after completed plugin installs or updates.
+
+Cloudflare credentials can come from the official Cloudflare plugin or supported WordPress constants. The dedicated configuration action requires the official plugin and exact confirmation. It validates zone access before storing settings without returning the credential; this does not validate every possible API permission.
+
+See the [product page](https://devenia.com/plugins/mcp-abilities-cloudflare/) and [Cloudflare purge documentation](https://developers.cloudflare.com/cache/how-to/purge-cache/) for the workflow and provider limits.
 
 == Installation ==
 
 1. Use WordPress 6.9 or newer and PHP 8.0 or newer.
 2. Install and activate WordPress MCP Adapter.
-3. Install and activate Cloudflare for WordPress.
+3. Configure Cloudflare for WordPress, or use supported WordPress constants for credentials and zone context.
 4. Download and install the stable package from https://downloads.devenia.com/mcp-abilities-cloudflare.zip.
 5. Configure and validate the Cloudflare credentials through the dedicated ability or the official plugin settings.
 
 == Changelog ==
+
+= 1.0.20 =
+* Excluded HTML-cache paths now cover the path root and its descendants and remain preserved on later rule updates.
+* Reject invalid purge targets before issuing cache changes.
+* Process the complete target list in bounded requests without silently dropping targets.
+* Preserve completed-request details when a later purge request fails.
 
 = 1.0.19 =
 * Added: a confirmed configuration ability validates Cloudflare credentials before storing them through the official Cloudflare plugin and never returns the secret.

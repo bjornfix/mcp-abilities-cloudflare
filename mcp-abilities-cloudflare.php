@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities - Cloudflare
  * Plugin URI: https://devenia.com/plugins/mcp-abilities-cloudflare/
  * Description: Cloudflare abilities for MCP. Inspect and clear Cloudflare cache for WordPress sites.
- * Version: 1.0.19
+ * Version: 1.0.20
  * Author: basicus
  * Author URI: https://profiles.wordpress.org/basicus/
  * License: GPL-2.0+
@@ -668,22 +668,49 @@ function mcp_cloudflare_deep_purge( $raw_input = array() ): array {
 		'prefixes' => static function ( $item ): string { return mcp_cloudflare_normalize_purge_prefix( $item ); },
 		'hosts'    => static function ( $item ): string { return is_string( $item ) ? sanitize_text_field( $item ) : ''; },
 	);
+	$invalid_targets = static function (): array {
+		$message = 'Every cache purge target must be valid and belong to the configured domain.';
+		return array(
+			'success' => false,
+			'message' => $message,
+			'error'   => array( 'code' => 'invalid_purge_targets', 'message' => $message ),
+			'purge'   => array( 'implementation' => 'mcp_cloudflare_deep_purge', 'completed' => array() ),
+		);
+	};
 	$values = array();
+	$zone_host = strtolower( (string) ( $context['domain'] ?? '' ) );
 	foreach ( $normalizers as $key => $normalizer ) {
-		$raw            = isset( $input[ $key ] ) && is_array( $input[ $key ] ) ? $input[ $key ] : array();
-		$values[ $key ] = array_slice( array_values( array_unique( array_filter( array_map( $normalizer, $raw ) ) ) ), 0, 100 );
+		if ( array_key_exists( $key, $input ) && ! is_array( $input[ $key ] ) ) {
+			return $invalid_targets();
+		}
+		$values[ $key ] = array();
+		foreach ( $input[ $key ] ?? array() as $raw ) {
+			$value = $normalizer( $raw );
+			if ( '' === $value ) {
+				return $invalid_targets();
+			}
+			if ( 'tags' !== $key ) {
+				$parts = wp_parse_url( 'files' === $key ? $value : 'https://' . $value );
+				$host = is_array( $parts ) ? strtolower( (string) ( $parts['host'] ?? '' ) ) : '';
+				if (
+					'' === $zone_host || '' === $host
+					|| ( $host !== $zone_host && ! str_ends_with( $host, '.' . $zone_host ) )
+					|| isset( $parts['user'] ) || isset( $parts['pass'] )
+					|| ( 'files' !== $key && ( isset( $parts['query'] ) || isset( $parts['fragment'] ) || isset( $parts['port'] ) ) )
+					|| ( 'hosts' === $key && isset( $parts['path'] ) )
+				) {
+					return $invalid_targets();
+				}
+			}
+			$values[ $key ][] = $value;
+		}
+		$values[ $key ] = array_values( array_unique( $values[ $key ] ) );
 	}
 
 	$exact_files      = array();
 	$auto_prefixes    = array();
 	$auto_prefix_from = array();
 	foreach ( $values['files'] as $file_url ) {
-		$file_parts = wp_parse_url( $file_url );
-		$file_host  = is_array( $file_parts ) ? strtolower( (string) ( $file_parts['host'] ?? '' ) ) : '';
-		$zone_host  = strtolower( (string) ( $context['domain'] ?? '' ) );
-		if ( '' === $file_host || ( $file_host !== $zone_host && ! str_ends_with( $file_host, '.' . $zone_host ) ) ) {
-			continue;
-		}
 		$prefix = mcp_cloudflare_html_file_url_to_prefix( $file_url, $context );
 		if ( '' !== $prefix ) {
 			$auto_prefixes[]               = $prefix;
@@ -692,12 +719,12 @@ function mcp_cloudflare_deep_purge( $raw_input = array() ): array {
 			$exact_files[] = $file_url;
 		}
 	}
-	$values['prefixes'] = array_slice( array_values( array_unique( array_merge( $values['prefixes'], $auto_prefixes ) ) ), 0, 100 );
+	$values['prefixes'] = array_values( array_unique( array_merge( $values['prefixes'], $auto_prefixes ) ) );
 
 	$operations = array();
 	foreach ( array( 'files' => $exact_files, 'tags' => $values['tags'], 'prefixes' => $values['prefixes'], 'hosts' => $values['hosts'] ) as $type => $items ) {
-		if ( $items ) {
-			$operations[] = array( 'type' => $type, 'data' => array( $type => $items ), 'count' => count( $items ) );
+		foreach ( array_chunk( $items, 100 ) as $batch ) {
+			$operations[] = array( 'type' => $type, 'data' => array( $type => $batch ), 'count' => count( $batch ) );
 		}
 	}
 	if ( ! $operations && false === $purge_everything ) {
@@ -805,7 +832,7 @@ function mcp_cloudflare_frontend_cache_invalidation_result( $current, $urls, $co
 
 	$site_host       = strtolower( (string) wp_parse_url( home_url( '/' ), PHP_URL_HOST ) );
 	$normalized_urls = array();
-	foreach ( array_slice( $urls, 0, 100 ) as $url ) {
+	foreach ( $urls as $url ) {
 		$normalized = is_string( $url ) ? esc_url_raw( $url ) : '';
 		$parts      = '' !== $normalized ? wp_parse_url( $normalized ) : false;
 		$scheme     = is_array( $parts ) ? strtolower( (string) ( $parts['scheme'] ?? '' ) ) : '';
@@ -866,7 +893,7 @@ function mcp_cloudflare_frontend_cache_invalidation_result( $current, $urls, $co
 		$local_cache_receipt = $current;
 	}
 
-	$result = mcp_cloudflare_deep_purge( array( 'purge_everything' => false, 'files' => array_slice( $normalized_urls, 0, 100 ) ) );
+	$result = mcp_cloudflare_deep_purge( array( 'purge_everything' => false, 'files' => $normalized_urls ) );
 	if (
 		null !== $local_cache_receipt
 		&& empty( $result['success'] )
@@ -1066,7 +1093,8 @@ function mcp_cloudflare_build_wordpress_html_cache_rule( string $host, int $edge
 		'(not http.cookie contains "wp_woocommerce_session_")',
 	);
 	foreach ( $exclude_paths as $path ) {
-		$expression_parts[] = '(http.request.uri.path ne "' . addcslashes( $path, "\\\"" ) . '")';
+		$expression_parts[] = '(http.request.uri.path ne "' . addcslashes( rtrim( $path, '/' ), "\\\"" ) . '")';
+		$expression_parts[] = '(not starts_with(http.request.uri.path, "' . addcslashes( $path, "\\\"" ) . '"))';
 	}
 
 	return array(
@@ -1231,7 +1259,7 @@ function mcp_register_cloudflare_abilities(): void {
 						'type'        => 'array',
 						'items'       => array( 'type' => 'string' ),
 						'maxItems'    => 100,
-						'description' => 'Optional: Cache tags to purge (Enterprise plans only).',
+						'description' => 'Optional: Cache tags to purge, subject to the Cloudflare account permissions and rate limits.',
 					),
 					'prefixes'         => array(
 						'type'        => 'array',

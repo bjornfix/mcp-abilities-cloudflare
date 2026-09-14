@@ -133,6 +133,9 @@ function esc_url_raw( $value ): string {
 function wp_remote_request( string $url, array $args ) {
 	global $remote_requests;
 	$remote_requests[] = array( 'url' => $url, 'args' => $args );
+	if ( isset( $GLOBALS['purge_failure_after'] ) && str_ends_with( $url, '/purge_cache' ) && count( $remote_requests ) > $GLOBALS['purge_failure_after'] ) {
+		return array( 'body' => '{"success":false,"errors":[{"code":1000,"message":"Simulated purge failure"}]}' );
+	}
 
 	if ( str_contains( $url, '/zones?name=example.com' ) ) {
 		return array(
@@ -457,6 +460,8 @@ $bounded_result = mcp_cloudflare_frontend_cache_invalidation_result( null, $boun
 $bounded_body   = json_decode( (string) $remote_requests[0]['args']['body'], true, 512, JSON_THROW_ON_ERROR );
 assert( true === $bounded_result['success'] );
 assert( 100 === count( $bounded_body['prefixes'] ) );
+assert( 2 === count( $remote_requests ) );
+assert( 105 === $bounded_result['purge']['count'] );
 
 $remote_requests = array();
 $invalid_result  = mcp_cloudflare_frontend_cache_invalidation_result( null, array( 'javascript:alert(1)', 'https://outside.invalid/page/' ), array() );
@@ -570,8 +575,8 @@ $bounded_local_receipt = array(
 );
 $over_limit_urls = array_merge( $bounded_receipt_urls, array( 'https://example.com/page-100/', 'https://example.com/page-101/' ) );
 $bounded_edge_result = mcp_cloudflare_frontend_cache_invalidation_result( $bounded_local_receipt, $over_limit_urls, array() );
-assert( true === $bounded_edge_result['success'] );
-assert( true === $bounded_edge_result['edge_cache']['skipped'] );
+assert( false === $bounded_edge_result['success'] );
+assert( 'invalid_local_cache_receipt' === $bounded_edge_result['error']['code'] );
 
 $malformed_local_receipt = array(
 	'success' => true,
