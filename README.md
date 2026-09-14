@@ -2,16 +2,16 @@
 
 Find which cached copy is out of date, inspect the connected Cloudflare zone, choose a purge scope and verify what the visitor receives. This WordPress add-on exposes Cloudflare cache diagnostics and changes through an authenticated MCP connection.
 
-[![Stable download](https://img.shields.io/badge/stable-1.0.19-blue)](https://downloads.devenia.com/mcp-abilities-cloudflare.zip)
+[![Stable download](https://img.shields.io/badge/stable-1.0.21-blue)](https://downloads.devenia.com/mcp-abilities-cloudflare.zip)
 [![License](https://img.shields.io/badge/license-GPLv2%2B-blue)](https://www.gnu.org/licenses/gpl-2.0.html)
 [![WordPress](https://img.shields.io/badge/WordPress-6.9%2B-blue)](https://wordpress.org/)
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple)](https://www.php.net/)
 
-**Current stable download:** 1.0.19
+**Current stable download:** 1.0.21
 
-**Source version / Stable tag:** 1.0.20, unreleased
+**Source version / Stable tag:** 1.0.21
 
-**Tested up to:** 7.0
+**Tested up to:** 7.1
 
 **Tags:** mcp, cloudflare, cache, ai, automation
 
@@ -112,7 +112,7 @@ Call `cloudflare/clear-cache`:
 
 Extensionless and `.html` paths without query strings become prefix purges; asset URLs and URLs with query strings remain exact file purges. The response's `auto_prefixes` records the conversions. A slash is added to extensionless paths when absent, so verify the intended canonical path.
 
-Each exposed input list accepts at most 100 items. In source version 1.0.20, the shared implementation validates the complete list, retains combined explicit and automatic prefixes and sends requests of at most 100 targets. It stops on a failed request and preserves details of already completed requests. Cloudflare account rate limits still apply.
+Each exposed input list accepts at most 100 items. In version 1.0.21, the shared implementation validates the complete list, retains combined explicit and automatic prefixes and sends requests of at most 100 targets. It stops on a failed request and preserves details of already completed requests. Cloudflare account rate limits still apply.
 
 ### Purge a branch
 
@@ -136,7 +136,7 @@ The action requires a readable existing cache-settings entrypoint. It preserves 
 
 The rule selects GET/HEAD HTML paths without queries and excludes several standard WordPress paths and session cookies. It sets an edge TTL that overrides origin cache instructions. Do not treat the rule as proof that custom login, account, checkout or personalised routes are safe to cache.
 
-In source version 1.0.20, `/members/` excludes both `/members` and descendants under `/members/`, while a different path such as `/membership/` remains outside that exclusion. Existing custom exclusions are retained when `exclude_paths` is omitted. Inspect the proposed expression and test your actual routes and cookies before enabling the rule.
+In version 1.0.21, `/members/` excludes both `/members` and descendants under `/members/`, while a different path such as `/membership/` remains outside that exclusion. Existing custom exclusions are retained when `exclude_paths` is omitted. Inspect the proposed expression and test your actual routes and cookies before enabling the rule.
 
 ### Configure credentials
 
@@ -145,14 +145,6 @@ In source version 1.0.20, `/members/` excludes both `/members` and descendants u
 The action looks up a zone using the WordPress hostname. A subdomain that is not itself a Cloudflare zone may require prior configuration of the correct zone through the official plugin or constants. Zone-read validation does not prove that every purge or rule permission is available.
 
 Supported constants are `CLOUDFLARE_EMAIL`, `CLOUDFLARE_API_KEY`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ZONE_ID` and `CLOUDFLARE_DOMAIN_NAME`.
-
-## Current Download Limits
-
-The stable download is still 1.0.19. The 1.0.20 changes above are not yet in that download.
-
-- An empty purge call defaults to the whole zone. Invalid targets can be discarded and leave a zone-wide default purge. Explicitly set `purge_everything: false` for targeted work and validate every target.
-- Shared frontend invalidation only considers the first 100 URLs. Combined explicit and automatically generated prefixes can also be truncated to 100.
-- Custom HTML-cache exclusions match the normalised trailing-slash path only. They do not exclude the unslashed form or descendants. Inspect the expression and do not assume a requested subtree is excluded.
 
 ## Ownership and Automatic Behaviour
 
@@ -169,12 +161,13 @@ The shared `devenia_workflow_frontend_cache_invalidation_result` hook accepts fr
 1. Download the [stable ZIP](https://downloads.devenia.com/mcp-abilities-cloudflare.zip) and install it through WordPress.
 2. Configure the correct Cloudflare credentials and zone, using the official plugin or supported constants.
 3. Connect the MCP client, confirm the required abilities are discoverable and read the zone before requesting changes.
-4. Check the limits for the installed version above.
+4. Review the purge scope and verify the returned page after each change.
 
 ## Changelog
 
-### 1.0.20 — unreleased
+### 1.0.21
 
+- Update compatibility metadata after validation on WordPress 7.1 RC3.
 - Reject invalid purge targets before cache changes.
 - Process complete shared target lists in requests of at most 100 targets; retain combined prefixes and completed-operation details.
 - Make custom HTML-cache path exclusions cover the root and descendants and retain them on later updates.
