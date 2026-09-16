@@ -3,7 +3,7 @@ Contributors: basicus
 Tags: mcp, cloudflare, cache, ai, automation
 Requires at least: 6.9
 Tested up to: 7.1
-Stable tag: 1.0.21
+Stable tag: 1.0.22
 Requires PHP: 8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -30,6 +30,8 @@ See the [product page](https://devenia.com/plugins/mcp-abilities-cloudflare/) an
 
 == Installation ==
 
+For update notifications in WordPress, install [Devenia MCP Updater](https://downloads.devenia.com/devenia-mcp-updater.zip). The updater is optional. You choose which plugins update automatically through WordPress.
+
 1. Use WordPress 6.9 or newer and PHP 8.0 or newer.
 2. Install and activate WordPress MCP Adapter.
 3. Configure Cloudflare for WordPress, or use supported WordPress constants for credentials and zone context.
@@ -37,6 +39,9 @@ See the [product page](https://devenia.com/plugins/mcp-abilities-cloudflare/) an
 5. Configure and validate the Cloudflare credentials through the dedicated ability or the official plugin settings.
 
 == Changelog ==
+
+= 1.0.22 =
+* Add one dismissible Plugins-screen reminder when Devenia MCP Updater is missing or inactive, with persistent install or activate links. Automatic updates remain your choice in WordPress.
 
 = 1.0.21 =
 * Updated compatibility metadata after validation on WordPress 7.1 RC3.

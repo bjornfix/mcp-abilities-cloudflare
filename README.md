@@ -2,14 +2,14 @@
 
 Find which cached copy is out of date, inspect the connected Cloudflare zone, choose a purge scope and verify what the visitor receives. This WordPress add-on exposes Cloudflare cache diagnostics and changes through an authenticated MCP connection.
 
-[![Stable download](https://img.shields.io/badge/stable-1.0.21-blue)](https://downloads.devenia.com/mcp-abilities-cloudflare.zip)
+[![Stable download](https://img.shields.io/badge/stable-1.0.22-blue)](https://downloads.devenia.com/mcp-abilities-cloudflare.zip)
 [![License](https://img.shields.io/badge/license-GPLv2%2B-blue)](https://www.gnu.org/licenses/gpl-2.0.html)
 [![WordPress](https://img.shields.io/badge/WordPress-6.9%2B-blue)](https://wordpress.org/)
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple)](https://www.php.net/)
 
-**Current stable download:** 1.0.21
+**Current stable download:** 1.0.22
 
-**Source version / Stable tag:** 1.0.21
+**Source version / Stable tag:** 1.0.22
 
 **Tested up to:** 7.1
 
@@ -158,12 +158,20 @@ The shared `devenia_workflow_frontend_cache_invalidation_result` hook accepts fr
 
 ## Installation
 
+
+For update notifications in WordPress, install [Devenia MCP Updater](https://downloads.devenia.com/devenia-mcp-updater.zip). The updater is optional. You choose which plugins update automatically through WordPress.
+
 1. Download the [stable ZIP](https://downloads.devenia.com/mcp-abilities-cloudflare.zip) and install it through WordPress.
 2. Configure the correct Cloudflare credentials and zone, using the official plugin or supported constants.
 3. Connect the MCP client, confirm the required abilities are discoverable and read the zone before requesting changes.
 4. Review the purge scope and verify the returned page after each change.
 
 ## Changelog
+
+
+### 1.0.22
+
+Add one dismissible Plugins-screen reminder when Devenia MCP Updater is missing or inactive, with persistent install or activate links. Automatic updates remain your choice in WordPress.
 
 ### 1.0.21
 
